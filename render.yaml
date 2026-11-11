@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: cidadao-facil-api
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/status
+    envVars:
+      - key: DB_URL
+        value: jdbc:oracle:thin:@oracle.fiap.com.br:1521:ORCL
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DDL_AUTO
+        value: update
+      - key: SEED_ENABLED
+        value: "true"
