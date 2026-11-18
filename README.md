@@ -121,6 +121,7 @@ Documentação interativa: **`/swagger-ui.html`** (a raiz `/` redireciona para l
 | PUT | `/api/orgaos/{id}` | Atualiza órgão |
 | DELETE | `/api/orgaos/{id}` | Exclui órgão |
 | GET | `/api/fontes` | Fontes oficiais com data de consulta |
+| DELETE | `/api/fontes/{id}` | Exclui uma fonte sem uso (409 se ainda houver serviço ou indicador ligado) |
 | GET | `/api/documentos` | Lista documentos |
 | GET | `/api/documentos/{id}` | Busca documento |
 | POST | `/api/documentos` | Cria documento |

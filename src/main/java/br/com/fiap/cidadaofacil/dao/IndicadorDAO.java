@@ -10,4 +10,6 @@ import java.util.List;
 @Repository
 public interface IndicadorDAO extends JpaRepository<Indicador, Long> {
     List<Indicador> findAllByOrderByIdAsc();
+
+    long countByFonteId(Long fonteId);
 }

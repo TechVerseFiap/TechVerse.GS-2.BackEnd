@@ -11,9 +11,13 @@ import br.com.fiap.cidadaofacil.model.Municipio;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 // BO do panorama: busca de municípios (sem acento e sem diferenciar maiúsculas) e indicadores públicos
@@ -25,8 +29,12 @@ public class PanoramaBO {
     private final IndicadorDAO indicadorDAO;
     private final IndicadorMunicipioDAO valorDAO;
 
+    // Município com o nome já normalizado e a população, usada para ordenar a busca
+    private record Item(Municipio municipio, String nome, long populacao) {
+    }
+
     // A lista de municípios muda só com nova carga: fica em memória para a busca ser rápida
-    private volatile List<Municipio> cacheMunicipios;
+    private volatile List<Item> cacheMunicipios;
 
     public PanoramaBO(MunicipioDAO municipioDAO, IndicadorDAO indicadorDAO, IndicadorMunicipioDAO valorDAO) {
         this.municipioDAO = municipioDAO;
@@ -40,18 +48,24 @@ public class PanoramaBO {
         if (termo.length() < 2) {
             throw new RegraNegocioException("Digite pelo menos 2 letras do nome do município.");
         }
-        List<Municipio> comecam = new ArrayList<>();
-        List<Municipio> contem = new ArrayList<>();
-        for (Municipio m : municipios()) {
-            String nome = AssistenteBO.normalizar(m.getNome());
-            if (nome.startsWith(termo)) {
-                comecam.add(m);
-            } else if (nome.contains(termo)) {
-                contem.add(m);
+        // Ordem: nome igual, começa com o termo, palavra que começa com o termo, contém. Empate: cidade maior primeiro
+        record Achado(Item item, int nivel) {
+        }
+        List<Achado> achados = new ArrayList<>();
+        for (Item item : municipios()) {
+            int nivel = item.nome().equals(termo) ? 0
+                    : item.nome().startsWith(termo) ? 1
+                    : item.nome().contains(" " + termo) ? 2
+                    : item.nome().contains(termo) ? 3 : -1;
+            if (nivel >= 0) {
+                achados.add(new Achado(item, nivel));
             }
         }
-        comecam.addAll(contem);
-        return comecam.stream().limit(MAX_RESULTADOS).map(PanoramaDTO.MunicipioResponse::de).toList();
+        achados.sort(Comparator.comparingInt(Achado::nivel)
+                .thenComparing(a -> a.item().populacao(), Comparator.reverseOrder())
+                .thenComparing(a -> a.item().nome()));
+        return achados.stream().limit(MAX_RESULTADOS)
+                .map(a -> PanoramaDTO.MunicipioResponse.de(a.item().municipio())).toList();
     }
 
     @Transactional(readOnly = true)
@@ -84,10 +98,17 @@ public class PanoramaBO {
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Município", codigoIbge));
     }
 
-    private List<Municipio> municipios() {
-        List<Municipio> lista = cacheMunicipios;
+    private List<Item> municipios() {
+        List<Item> lista = cacheMunicipios;
         if (lista == null) {
-            lista = List.copyOf(municipioDAO.findAllByOrderByNomeAsc());
+            Map<Long, Long> populacao = new HashMap<>();
+            for (Object[] linha : valorDAO.valoresDoIndicador("POPULACAO")) {
+                populacao.put(((Number) linha[0]).longValue(), ((BigDecimal) linha[1]).longValue());
+            }
+            lista = municipioDAO.findAllByOrderByNomeAsc().stream()
+                    .map(m -> new Item(m, AssistenteBO.normalizar(m.getNome()),
+                            populacao.getOrDefault(m.getCodigoIbge(), 0L)))
+                    .toList();
             cacheMunicipios = lista;
         }
         return lista;

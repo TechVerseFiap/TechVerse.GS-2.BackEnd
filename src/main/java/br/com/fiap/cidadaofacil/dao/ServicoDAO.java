@@ -24,6 +24,8 @@ public interface ServicoDAO extends JpaRepository<Servico, Long> {
 
     long countByOrgaoId(Long orgaoId);
 
+    long countByFonteId(Long fonteId);
+
     // Busca por texto no nome/descrição, com filtro opcional de categoria
     @Query("""
             SELECT s FROM Servico s
