@@ -2,12 +2,13 @@ package br.com.fiap.cidadaofacil.model;
 
 import jakarta.persistence.*;
 
-// Entidade: critério publicado pela fonte oficial - tabela T_CF_REQUISITO
+// Entidade: critério publicado pela fonte oficial - tabela REQUISITO
 @Entity
-@Table(name = "T_CF_REQUISITO")
+@Table(name = "REQUISITO")
 public class Requisito {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sqRequisito")
+    @SequenceGenerator(name = "sqRequisito", sequenceName = "SQ_REQUISITO", allocationSize = 1)
     @Column(name = "ID_REQUISITO")
     private Long id;
 
@@ -15,7 +16,7 @@ public class Requisito {
     @JoinColumn(name = "ID_SERVICO", nullable = false)
     private Servico servico;
 
-    @Column(name = "DS_REQUISITO", nullable = false, length = 300)
+    @Column(name = "DS_REQUISITO", nullable = false, length = 600)
     private String descricao;
 
     public Requisito() {

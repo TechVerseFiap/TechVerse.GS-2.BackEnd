@@ -40,7 +40,7 @@ public class DocumentoBO {
         if (documentoDAO.existsByNomeIgnoreCase(nome)) {
             throw new ConflitoException("Já existe um documento com o nome '" + nome + "'.");
         }
-        return DocumentoDTO.Response.de(documentoDAO.save(new Documento(nome, req.descricao())));
+        return DocumentoDTO.Response.de(documentoDAO.save(new Documento(nome, CategoriaBO.descricaoOuNome(req.descricao(), nome))));
     }
 
     @Transactional
@@ -51,7 +51,7 @@ public class DocumentoBO {
             throw new ConflitoException("Já existe outro documento com o nome '" + nome + "'.");
         }
         documento.setNome(nome);
-        documento.setDescricao(req.descricao());
+        documento.setDescricao(CategoriaBO.descricaoOuNome(req.descricao(), nome));
         return DocumentoDTO.Response.de(documentoDAO.save(documento));
     }
 

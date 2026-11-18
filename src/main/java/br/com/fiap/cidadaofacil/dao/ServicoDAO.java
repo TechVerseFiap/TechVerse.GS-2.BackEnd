@@ -1,6 +1,7 @@
 package br.com.fiap.cidadaofacil.dao;
 
 import br.com.fiap.cidadaofacil.model.Servico;
+import br.com.fiap.cidadaofacil.model.StatusServico;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -13,9 +14,15 @@ import java.util.List;
 public interface ServicoDAO extends JpaRepository<Servico, Long> {
     List<Servico> findByCategoriaIdOrderByNomeAsc(Long categoriaId);
 
+    List<Servico> findByCategoriaIdAndStatusOrderByNomeAsc(Long categoriaId, StatusServico status);
+
     List<Servico> findAllByOrderByNomeAsc();
 
+    List<Servico> findByStatus(StatusServico status);
+
     long countByCategoriaId(Long categoriaId);
+
+    long countByOrgaoId(Long orgaoId);
 
     // Busca por texto no nome/descrição, com filtro opcional de categoria
     @Query("""

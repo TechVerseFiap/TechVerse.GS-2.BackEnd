@@ -42,7 +42,7 @@ public class CategoriaBO {
         if (categoriaDAO.existsByNomeIgnoreCase(nome)) {
             throw new ConflitoException("Já existe uma categoria com o nome '" + nome + "'.");
         }
-        Categoria categoria = new Categoria(nome, req.descricao());
+        Categoria categoria = new Categoria(nome, descricaoOuNome(req.descricao(), nome));
         return CategoriaDTO.Response.de(categoriaDAO.save(categoria));
     }
 
@@ -54,7 +54,7 @@ public class CategoriaBO {
             throw new ConflitoException("Já existe outra categoria com o nome '" + nome + "'.");
         }
         categoria.setNome(nome);
-        categoria.setDescricao(req.descricao());
+        categoria.setDescricao(descricaoOuNome(req.descricao(), nome));
         return CategoriaDTO.Response.de(categoriaDAO.save(categoria));
     }
 
@@ -68,6 +68,11 @@ public class CategoriaBO {
                     + " serviço(s) vinculado(s). Mova ou exclua os serviços antes.");
         }
         categoriaDAO.delete(categoria);
+    }
+
+    // A descrição é obrigatória no banco: se vier vazia, usa o próprio nome
+    static String descricaoOuNome(String descricao, String nome) {
+        return descricao == null || descricao.isBlank() ? nome : descricao.trim();
     }
 
     // Busca a entidade ou lança 404 (usado pelos outros BOs)

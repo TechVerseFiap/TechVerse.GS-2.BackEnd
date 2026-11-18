@@ -1,6 +1,7 @@
 package br.com.fiap.cidadaofacil.dao;
 
 import br.com.fiap.cidadaofacil.model.ServicoDocumento;
+import br.com.fiap.cidadaofacil.model.ServicoDocumentoId;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -9,7 +10,7 @@ import java.util.Optional;
 
 // DAO: acesso ao banco de vínculos serviço-documento (Spring Data JPA gera o SQL)
 @Repository
-public interface ServicoDocumentoDAO extends JpaRepository<ServicoDocumento, Long> {
+public interface ServicoDocumentoDAO extends JpaRepository<ServicoDocumento, ServicoDocumentoId> {
     List<ServicoDocumento> findByServicoId(Long servicoId);
 
     Optional<ServicoDocumento> findByServicoIdAndDocumentoId(Long servicoId, Long documentoId);

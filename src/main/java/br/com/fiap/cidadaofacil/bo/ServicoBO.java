@@ -1,6 +1,8 @@
 package br.com.fiap.cidadaofacil.bo;
 
 import br.com.fiap.cidadaofacil.dao.DocumentoDAO;
+import br.com.fiap.cidadaofacil.dao.FonteDAO;
+import br.com.fiap.cidadaofacil.dao.OrgaoDAO;
 import br.com.fiap.cidadaofacil.dao.RecomendacaoDAO;
 import br.com.fiap.cidadaofacil.dao.ServicoDAO;
 import br.com.fiap.cidadaofacil.dao.ServicoDocumentoDAO;
@@ -10,28 +12,40 @@ import br.com.fiap.cidadaofacil.exception.ConflitoException;
 import br.com.fiap.cidadaofacil.exception.RecursoNaoEncontradoException;
 import br.com.fiap.cidadaofacil.exception.RegraNegocioException;
 import br.com.fiap.cidadaofacil.model.Documento;
+import br.com.fiap.cidadaofacil.model.Fonte;
+import br.com.fiap.cidadaofacil.model.Orgao;
 import br.com.fiap.cidadaofacil.model.Servico;
 import br.com.fiap.cidadaofacil.model.ServicoDocumento;
+import br.com.fiap.cidadaofacil.model.StatusServico;
+import br.com.fiap.cidadaofacil.model.TipoFonte;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
 import java.util.List;
 
-// BO: regras de negócio de serviços e seus documentos
+// BO: regras de negócio de serviços, com órgão, fonte oficial, canais e documentos
 @Service
 public class ServicoBO {
+    static final String PUBLICO_PADRAO = "Público geral. Confira os critérios na fonte oficial.";
+    static final String ENDERECO_PRESENCIAL_PADRAO = "Atendimento presencial: consulte o órgão responsável.";
+
     private final ServicoDAO servicoDAO;
     private final DocumentoDAO documentoDAO;
     private final ServicoDocumentoDAO servicoDocumentoDAO;
     private final RecomendacaoDAO recomendacaoDAO;
+    private final OrgaoDAO orgaoDAO;
+    private final FonteDAO fonteDAO;
     private final CategoriaBO categoriaBO;
 
     public ServicoBO(ServicoDAO servicoDAO, DocumentoDAO documentoDAO, ServicoDocumentoDAO servicoDocumentoDAO,
-                     RecomendacaoDAO recomendacaoDAO, CategoriaBO categoriaBO) {
+                     RecomendacaoDAO recomendacaoDAO, OrgaoDAO orgaoDAO, FonteDAO fonteDAO, CategoriaBO categoriaBO) {
         this.servicoDAO = servicoDAO;
         this.documentoDAO = documentoDAO;
         this.servicoDocumentoDAO = servicoDocumentoDAO;
         this.recomendacaoDAO = recomendacaoDAO;
+        this.orgaoDAO = orgaoDAO;
+        this.fonteDAO = fonteDAO;
         this.categoriaBO = categoriaBO;
     }
 
@@ -78,7 +92,8 @@ public class ServicoBO {
         Servico servico = buscarEntidade(id);
         if (recomendacaoDAO.existsByServicoId(id)) {
             throw new ConflitoException("O serviço '" + servico.getNome()
-                    + "' já foi recomendado pelo assistente e faz parte do histórico. Não pode ser excluído.");
+                    + "' já foi recomendado pelo assistente e faz parte do histórico. "
+                    + "Para tirá-lo do catálogo, marque-o como inativo.");
         }
         servicoDAO.delete(servico);
     }
@@ -100,26 +115,26 @@ public class ServicoBO {
         if (servicoDocumentoDAO.existsByServicoIdAndDocumentoId(servicoId, req.documentoId())) {
             throw new ConflitoException("O documento '" + documento.getNome() + "' já está vinculado a este serviço.");
         }
-        ServicoDocumento vinculo = servicoDocumentoDAO.save(new ServicoDocumento(servico, documento, req.observacao()));
-        return DocumentoDTO.DoServico.de(vinculo);
+        boolean obrigatorio = req.obrigatorio() == null || req.obrigatorio();
+        ServicoDocumento vinculo = new ServicoDocumento(servico, documento, obrigatorio, req.observacao());
+        return DocumentoDTO.DoServico.de(servicoDocumentoDAO.save(vinculo));
     }
 
     @Transactional
     public DocumentoDTO.DoServico atualizarVinculoDocumento(Long servicoId, Long documentoId, DocumentoDTO.Vinculo req) {
         buscarEntidade(servicoId);
-        ServicoDocumento vinculo = servicoDocumentoDAO.findByServicoIdAndDocumentoId(servicoId, documentoId)
-                .orElseThrow(() -> new RegraNegocioException(
-                        "O documento " + documentoId + " não está vinculado ao serviço " + servicoId + "."));
+        ServicoDocumento vinculo = buscarVinculo(servicoId, documentoId);
         vinculo.setObservacao(req.observacao());
+        if (req.obrigatorio() != null) {
+            vinculo.setObrigatorio(req.obrigatorio());
+        }
         return DocumentoDTO.DoServico.de(servicoDocumentoDAO.save(vinculo));
     }
 
     @Transactional
     public void desvincularDocumento(Long servicoId, Long documentoId) {
         Servico servico = buscarEntidade(servicoId);
-        ServicoDocumento vinculo = servicoDocumentoDAO.findByServicoIdAndDocumentoId(servicoId, documentoId)
-                .orElseThrow(() -> new RegraNegocioException(
-                        "O documento " + documentoId + " não está vinculado ao serviço " + servicoId + "."));
+        ServicoDocumento vinculo = buscarVinculo(servicoId, documentoId);
         servico.getDocumentos().remove(vinculo);
         servicoDocumentoDAO.delete(vinculo);
     }
@@ -131,24 +146,56 @@ public class ServicoBO {
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Serviço", id));
     }
 
-    // Aplica os dados da requisição aplicando as regras de negócio
+    private ServicoDocumento buscarVinculo(Long servicoId, Long documentoId) {
+        return servicoDocumentoDAO.findByServicoIdAndDocumentoId(servicoId, documentoId)
+                .orElseThrow(() -> new RegraNegocioException(
+                        "O documento " + documentoId + " não está vinculado ao serviço " + servicoId + "."));
+    }
+
+    // Aplica os dados da requisição seguindo as regras de negócio
     private void preencher(Servico servico, ServicoDTO.Request req) {
-        validarFonte(req.urlFonte());
+        String url = req.urlFonte().trim();
+        validarFonte(url);
 
         servico.setCategoria(categoriaBO.buscarEntidade(req.categoriaId()));
+        servico.setOrgao(resolverOrgao(req));
         servico.setNome(req.nome().trim());
         servico.setDescricao(req.descricao().trim());
-        servico.setPublicoAlvo(req.publicoAlvo());
-        servico.setOrgaoResponsavel(req.orgaoResponsavel().trim());
-        servico.setCanal(req.canal());
-        servico.setUrlFonte(req.urlFonte().trim());
-        servico.setDataVerificacao(req.dataVerificacao());
+        servico.setPublicoAlvo(req.publicoAlvo() == null || req.publicoAlvo().isBlank()
+                ? PUBLICO_PADRAO : req.publicoAlvo().trim());
+        servico.setFonte(registrarFonte(url, req.dataVerificacao(), servico.getNome()));
+        servico.definirCanais(req.canal(), url, ENDERECO_PRESENCIAL_PADRAO);
         servico.setPalavrasChave(normalizarPalavrasChave(req.palavrasChave()));
+        servico.setStatus(req.ativo() == null || req.ativo() ? StatusServico.ATIVO : StatusServico.INATIVO);
+    }
+
+    // Órgão por id; se não vier, procura pelo nome ou sigla já cadastrados
+    private Orgao resolverOrgao(ServicoDTO.Request req) {
+        if (req.orgaoId() != null) {
+            return orgaoDAO.findById(req.orgaoId())
+                    .orElseThrow(() -> new RecursoNaoEncontradoException("Órgão", req.orgaoId()));
+        }
+        String texto = req.orgaoResponsavel() == null ? "" : req.orgaoResponsavel().trim();
+        if (texto.isEmpty()) {
+            throw new RegraNegocioException("Informe o órgão responsável (orgaoId).");
+        }
+        return orgaoDAO.findFirstByNomeIgnoreCaseOrSiglaIgnoreCase(texto, texto)
+                .orElseThrow(() -> new RegraNegocioException("O órgão '" + texto
+                        + "' não está cadastrado. Cadastre-o em /api/orgaos e informe o orgaoId."));
+    }
+
+    // Reaproveita a fonte pela URL (atualizando a data de verificação) ou cria uma nova fonte oficial
+    private Fonte registrarFonte(String url, java.time.LocalDate dataVerificacao, String nomeServico) {
+        Fonte fonte = fonteDAO.findByUrl(url).orElseGet(() -> new Fonte(
+                limitar("Fonte oficial - " + nomeServico, 150), url, TipoFonte.OFICIAL, dataVerificacao));
+        fonte.setTipo(TipoFonte.OFICIAL);
+        fonte.setDataConsulta(dataVerificacao);
+        return fonteDAO.save(fonte);
     }
 
     // Regra central: toda orientação precisa de fonte oficial com https
     private void validarFonte(String url) {
-        String u = url.trim().toLowerCase();
+        String u = url.toLowerCase();
         if (!u.startsWith("https://")) {
             throw new RegraNegocioException("A URL da fonte oficial deve começar com https://");
         }
@@ -162,10 +209,14 @@ public class ServicoBO {
         if (palavras == null || palavras.isBlank()) {
             return null;
         }
-        return String.join(",", java.util.Arrays.stream(palavras.split(","))
+        return String.join(",", Arrays.stream(palavras.split(","))
                 .map(p -> p.trim().toLowerCase())
                 .filter(p -> !p.isEmpty())
                 .distinct()
                 .toList());
+    }
+
+    private static String limitar(String texto, int max) {
+        return texto.length() <= max ? texto : texto.substring(0, max);
     }
 }

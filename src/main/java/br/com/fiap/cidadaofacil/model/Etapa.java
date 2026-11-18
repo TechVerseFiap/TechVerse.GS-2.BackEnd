@@ -2,13 +2,14 @@ package br.com.fiap.cidadaofacil.model;
 
 import jakarta.persistence.*;
 
-// Entidade: passo do atendimento, com ordem única por serviço - tabela T_CF_ETAPA
+// Entidade: passo do atendimento, com ordem única por serviço - tabela ETAPA
 @Entity
-@Table(name = "T_CF_ETAPA",
-        uniqueConstraints = @UniqueConstraint(name = "UK_CF_ETAPA_ORDEM", columnNames = {"ID_SERVICO", "NR_ORDEM"}))
+@Table(name = "ETAPA",
+        uniqueConstraints = @UniqueConstraint(name = "UQ_ETAPA_1", columnNames = {"ID_SERVICO", "NR_ORDEM"}))
 public class Etapa {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sqEtapa")
+    @SequenceGenerator(name = "sqEtapa", sequenceName = "SQ_ETAPA", allocationSize = 1)
     @Column(name = "ID_ETAPA")
     private Long id;
 
@@ -19,7 +20,7 @@ public class Etapa {
     @Column(name = "NR_ORDEM", nullable = false)
     private Integer ordem;
 
-    @Column(name = "DS_ETAPA", nullable = false, length = 300)
+    @Column(name = "DS_ETAPA", nullable = false, length = 600)
     private String descricao;
 
     public Etapa() {

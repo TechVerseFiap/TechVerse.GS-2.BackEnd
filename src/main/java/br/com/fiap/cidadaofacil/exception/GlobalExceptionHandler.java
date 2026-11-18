@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -57,6 +58,13 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErroResponse> tipoInvalido(MethodArgumentTypeMismatchException ex, HttpServletRequest req) {
         return montar(HttpStatus.BAD_REQUEST,
                 "O parâmetro '" + ex.getName() + "' recebeu um valor inválido: " + ex.getValue(), req, null);
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ErroResponse> parametroAusente(MissingServletRequestParameterException ex,
+                                                         HttpServletRequest req) {
+        return montar(HttpStatus.BAD_REQUEST,
+                "O parâmetro '" + ex.getParameterName() + "' é obrigatório.", req, null);
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)

@@ -16,7 +16,7 @@ public final class DocumentoDTO {
             @Size(max = 100, message = "O nome deve ter no máximo 100 caracteres.")
             String nome,
 
-            @Size(max = 300, message = "A descrição deve ter no máximo 300 caracteres.")
+            @Size(max = 400, message = "A descrição deve ter no máximo 400 caracteres.")
             String descricao
     ) {
     }
@@ -27,19 +27,22 @@ public final class DocumentoDTO {
         }
     }
 
+    // obrigatorio é opcional na entrada: se não vier, o documento é tratado como obrigatório
     public record Vinculo(
             @NotNull(message = "O id do documento é obrigatório.")
             Long documentoId,
 
-            @Size(max = 255, message = "A observação deve ter no máximo 255 caracteres.")
-            String observacao
+            @Size(max = 400, message = "A observação deve ter no máximo 400 caracteres.")
+            String observacao,
+
+            Boolean obrigatorio
     ) {
     }
 
-    public record DoServico(Long documentoId, String nome, String descricao, String observacao) {
+    public record DoServico(Long documentoId, String nome, String descricao, String observacao, boolean obrigatorio) {
         public static DoServico de(ServicoDocumento sd) {
             Documento d = sd.getDocumento();
-            return new DoServico(d.getId(), d.getNome(), d.getDescricao(), sd.getObservacao());
+            return new DoServico(d.getId(), d.getNome(), d.getDescricao(), sd.getObservacao(), sd.isObrigatorio());
         }
     }
 }

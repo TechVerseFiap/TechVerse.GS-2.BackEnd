@@ -28,14 +28,15 @@ public final class AssistenteDTO {
             String orgaoResponsavel,
             String urlFonte,
             String justificativa,
-            int pontuacao
+            int posicao,
+            Integer pontuacao
     ) {
         public static ServicoRecomendado de(Recomendacao r) {
             return new ServicoRecomendado(
                     r.getServico().getId(), r.getServico().getNome(),
                     r.getServico().getCategoria().getNome(),
-                    r.getServico().getOrgaoResponsavel(), r.getServico().getUrlFonte(),
-                    r.getJustificativa(), r.getPontuacao());
+                    r.getServico().getOrgao().getNome(), r.getServico().getUrlFonte(),
+                    r.getJustificativa(), r.getPosicao() == null ? 0 : r.getPosicao(), r.getPontuacao());
         }
     }
 

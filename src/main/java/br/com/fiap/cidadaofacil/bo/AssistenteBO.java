@@ -10,6 +10,7 @@ import br.com.fiap.cidadaofacil.model.Interacao;
 import br.com.fiap.cidadaofacil.model.Recomendacao;
 import br.com.fiap.cidadaofacil.model.ResultadoInteracao;
 import br.com.fiap.cidadaofacil.model.Servico;
+import br.com.fiap.cidadaofacil.model.StatusServico;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,9 +49,9 @@ public class AssistenteBO {
                 .filter(c -> citaCategoria(texto, c))
                 .toList();
 
-        // 1. Pontua cada serviço pelas palavras-chave encontradas no texto
+        // 1. Pontua cada serviço ativo pelas palavras-chave encontradas no texto
         List<Candidato> candidatos = new ArrayList<>();
-        for (Servico servico : servicoDAO.findAll()) {
+        for (Servico servico : servicoDAO.findByStatus(StatusServico.ATIVO)) {
             List<String> encontradas = servico.listaPalavrasChave().stream()
                     .filter(p -> contemTermo(texto, normalizar(p)))
                     .toList();
@@ -88,7 +89,7 @@ public class AssistenteBO {
         // 3. Só reconheceu a categoria: pede esclarecimento
         if (!categoriasCitadas.isEmpty()) {
             Categoria categoria = categoriasCitadas.get(0);
-            List<Servico> opcoes = servicoDAO.findByCategoriaIdOrderByNomeAsc(categoria.getId());
+            List<Servico> opcoes = servicoDAO.findByCategoriaIdAndStatusOrderByNomeAsc(categoria.getId(), StatusServico.ATIVO);
 
             Interacao interacao = new Interacao(categoria.getNome(), ResultadoInteracao.PEDIU_ESCLARECIMENTO);
             opcoes.stream().limit(5).forEach(s -> interacao.adicionarRecomendacao(new Recomendacao(

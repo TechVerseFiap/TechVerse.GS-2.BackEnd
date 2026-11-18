@@ -2,19 +2,20 @@ package br.com.fiap.cidadaofacil.model;
 
 import jakarta.persistence.*;
 
-// Entidade: tipo de documento exigido (não guarda documentos de pessoas) - tabela T_CF_DOCUMENTO
+// Entidade: tipo de documento exigido (não guarda documentos de pessoas) - tabela DOCUMENTO
 @Entity
-@Table(name = "T_CF_DOCUMENTO")
+@Table(name = "DOCUMENTO")
 public class Documento {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sqDocumento")
+    @SequenceGenerator(name = "sqDocumento", sequenceName = "SQ_DOCUMENTO", allocationSize = 1)
     @Column(name = "ID_DOCUMENTO")
     private Long id;
 
     @Column(name = "NM_DOCUMENTO", nullable = false, unique = true, length = 100)
     private String nome;
 
-    @Column(name = "DS_DOCUMENTO", length = 300)
+    @Column(name = "DS_FINALIDADE", nullable = false, length = 400)
     private String descricao;
 
     public Documento() {

@@ -2,39 +2,50 @@ package br.com.fiap.cidadaofacil.model;
 
 import jakarta.persistence.*;
 
-// Entidade associativa N:N entre serviço e documento - tabela T_CF_SERVICO_DOCUMENTO
+// Entidade associativa N:N entre serviço e documento - tabela SERVICO_DOCUMENTO
 @Entity
-@Table(name = "T_CF_SERVICO_DOCUMENTO",
-        uniqueConstraints = @UniqueConstraint(name = "UK_CF_SERV_DOC", columnNames = {"ID_SERVICO", "ID_DOCUMENTO"}))
+@Table(name = "SERVICO_DOCUMENTO")
 public class ServicoDocumento {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "ID_SERVICO_DOCUMENTO")
-    private Long id;
+    @EmbeddedId
+    private ServicoDocumentoId id = new ServicoDocumentoId();
 
+    @MapsId("servicoId")
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "ID_SERVICO", nullable = false)
+    @JoinColumn(name = "ID_SERVICO")
     private Servico servico;
 
+    @MapsId("documentoId")
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "ID_DOCUMENTO", nullable = false)
+    @JoinColumn(name = "ID_DOCUMENTO")
     private Documento documento;
 
-    @Column(name = "DS_OBSERVACAO", length = 255)
+    @Column(name = "FL_OBRIGATORIO", nullable = false, length = 1)
+    private String obrigatorio = "S";
+
+    @Column(name = "DS_OBSERVACAO", length = 400)
     private String observacao;
 
     public ServicoDocumento() {
     }
 
-    public ServicoDocumento(Servico servico, Documento documento, String observacao) {
+    public ServicoDocumento(Servico servico, Documento documento, boolean obrigatorio, String observacao) {
+        this.id = new ServicoDocumentoId(servico.getId(), documento.getId());
         this.servico = servico;
         this.documento = documento;
+        this.obrigatorio = obrigatorio ? "S" : "N";
         this.observacao = observacao;
     }
 
+    public boolean isObrigatorio() {
+        return "S".equals(obrigatorio);
+    }
+
+    public void setObrigatorio(boolean obrigatorio) {
+        this.obrigatorio = obrigatorio ? "S" : "N";
+    }
+
     // Getters e setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public ServicoDocumentoId getId() { return id; }
 
     public Servico getServico() { return servico; }
     public void setServico(Servico servico) { this.servico = servico; }

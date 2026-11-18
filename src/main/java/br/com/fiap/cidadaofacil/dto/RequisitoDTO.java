@@ -11,7 +11,7 @@ public final class RequisitoDTO {
 
     public record Request(
             @NotBlank(message = "A descrição do requisito é obrigatória.")
-            @Size(max = 300, message = "A descrição deve ter no máximo 300 caracteres.")
+            @Size(max = 600, message = "A descrição deve ter no máximo 600 caracteres.")
             String descricao
     ) {
     }

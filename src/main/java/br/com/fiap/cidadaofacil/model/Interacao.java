@@ -6,26 +6,28 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-// Entidade: pergunta ao assistente, sem guardar o texto do cidadão - tabela T_CF_INTERACAO
+// Entidade: pergunta ao assistente, sem guardar o texto do cidadão - tabela INTERACAO
 @Entity
-@Table(name = "T_CF_INTERACAO")
+@Table(name = "INTERACAO")
 public class Interacao {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sqInteracao")
+    @SequenceGenerator(name = "sqInteracao", sequenceName = "SQ_INTERACAO", allocationSize = 1)
     @Column(name = "ID_INTERACAO")
     private Long id;
 
-    @Column(name = "DS_ASSUNTO", nullable = false, length = 60)
+    @Column(name = "DS_ASSUNTO", nullable = false, length = 100)
     private String assunto;
 
-    @Column(name = "DT_INTERACAO", nullable = false)
+    @Column(name = "DH_INTERACAO", nullable = false)
     private LocalDateTime dataHora;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "TP_RESULTADO", nullable = false, length = 25)
+    @Convert(converter = ResultadoInteracaoConverter.class)
+    @Column(name = "ST_RESULTADO", nullable = false, length = 20)
     private ResultadoInteracao resultado;
 
     @OneToMany(mappedBy = "interacao", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("posicao ASC")
     private List<Recomendacao> recomendacoes = new ArrayList<>();
 
     public Interacao() {
@@ -37,8 +39,10 @@ public class Interacao {
         this.dataHora = LocalDateTime.now();
     }
 
+    // A posição da recomendação segue a ordem de inclusão (1, 2, 3...)
     public void adicionarRecomendacao(Recomendacao recomendacao) {
         recomendacao.setInteracao(this);
+        recomendacao.setPosicao(recomendacoes.size() + 1);
         recomendacoes.add(recomendacao);
     }
 

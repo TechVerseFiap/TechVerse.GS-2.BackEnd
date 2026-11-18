@@ -43,6 +43,17 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Flyway: cria as tabelas e carrega os dados com os mesmos scripts da disciplina de Database -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-oracle</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>

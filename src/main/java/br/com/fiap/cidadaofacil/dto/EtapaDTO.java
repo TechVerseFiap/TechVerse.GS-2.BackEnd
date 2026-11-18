@@ -19,7 +19,7 @@ public final class EtapaDTO {
             Integer ordem,
 
             @NotBlank(message = "A descrição da etapa é obrigatória.")
-            @Size(max = 300, message = "A descrição deve ter no máximo 300 caracteres.")
+            @Size(max = 600, message = "A descrição deve ter no máximo 600 caracteres.")
             String descricao
     ) {
     }
