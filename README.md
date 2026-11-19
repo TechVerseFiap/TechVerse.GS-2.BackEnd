@@ -11,7 +11,7 @@
 | Problema, em uma frase | Cidadãos têm dificuldade para encontrar, entender e acessar informações sobre serviços públicos, documentos, direitos e benefícios |
 | Como funciona | O cidadão descreve o que precisa; o assistente identifica o assunto, consulta um catálogo com fonte oficial e mostra requisitos, documentos, etapas e o link oficial |
 | O que cada parte faz | **Java (este repositório):** API REST com catálogo, assistente e panorama do município · **Database:** modelo Oracle (14 tabelas) usado pela API · Front-end: telas de busca, detalhe e painel · Python: análise de demanda / algoritmo · Packet Tracer: rede do ponto de atendimento |
-| Links | API: https://cidadao-facil-api.onrender.com · Site: https://cidadao-facil-techverse.vercel.app · Front-end: https://github.com/TechVerseFiap/TechVerse.GS-2.FrontEnd |
+| Links | API: https://cidadao-facil-api-6hqm.onrender.com · Site: https://cidadao-facil-web.onrender.com (também em https://cidadao-facil-techverse.vercel.app) · Front-end: https://github.com/TechVerseFiap/TechVerse.GS-2.FrontEnd |
 | Indicador de impacto | Taxa de buscas que terminam com uma orientação encontrada (`GET /api/assistente/indicadores`) |
 | ODS conectados | 4, 8, 10 e 16 |
 
