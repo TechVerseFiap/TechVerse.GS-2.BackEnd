@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 // Repository: acesso ao banco de serviços (Spring Data JPA gera o SQL)
 @Repository
@@ -25,6 +26,9 @@ public interface ServicoRepository extends JpaRepository<Servico, Long> {
     long countByOrgaoId(Long orgaoId);
 
     long countByFonteId(Long fonteId);
+
+    // Serviço ligado a uma fonte (a sincronização com o gov.br identifica o serviço pela URL da fonte)
+    Optional<Servico> findFirstByFonteId(Long fonteId);
 
     // Busca por texto no nome/descrição, com filtro opcional de categoria
     @Query("""
