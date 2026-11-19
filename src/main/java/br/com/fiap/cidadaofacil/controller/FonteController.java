@@ -1,6 +1,6 @@
 package br.com.fiap.cidadaofacil.controller;
 
-import br.com.fiap.cidadaofacil.bo.FonteBO;
+import br.com.fiap.cidadaofacil.service.FonteService;
 import br.com.fiap.cidadaofacil.dto.FonteDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -18,22 +18,22 @@ import java.util.List;
 @RequestMapping("/api/fontes")
 @Tag(name = "Fontes", description = "Referências oficiais usadas no catálogo e no panorama")
 public class FonteController {
-    private final FonteBO fonteBO;
+    private final FonteService fonteService;
 
-    public FonteController(FonteBO fonteBO) {
-        this.fonteBO = fonteBO;
+    public FonteController(FonteService fonteService) {
+        this.fonteService = fonteService;
     }
 
     @GetMapping
     @Operation(summary = "Lista as fontes oficiais com a data de consulta")
     public List<FonteDTO.Response> listar() {
-        return fonteBO.listar();
+        return fonteService.listar();
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Exclui uma fonte que não é mais usada por serviços nem indicadores")
     public ResponseEntity<Void> excluir(@PathVariable Long id) {
-        fonteBO.excluir(id);
+        fonteService.excluir(id);
         return ResponseEntity.noContent().build();
     }
 }

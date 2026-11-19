@@ -1,8 +1,8 @@
-package br.com.fiap.cidadaofacil.bo;
+package br.com.fiap.cidadaofacil.service;
 
-import br.com.fiap.cidadaofacil.dao.IndicadorDAO;
-import br.com.fiap.cidadaofacil.dao.IndicadorMunicipioDAO;
-import br.com.fiap.cidadaofacil.dao.MunicipioDAO;
+import br.com.fiap.cidadaofacil.repository.IndicadorRepository;
+import br.com.fiap.cidadaofacil.repository.IndicadorMunicipioRepository;
+import br.com.fiap.cidadaofacil.repository.MunicipioRepository;
 import br.com.fiap.cidadaofacil.dto.PanoramaDTO;
 import br.com.fiap.cidadaofacil.exception.RecursoNaoEncontradoException;
 import br.com.fiap.cidadaofacil.exception.RegraNegocioException;
@@ -20,14 +20,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-// BO do panorama: busca de municípios (sem acento e sem diferenciar maiúsculas) e indicadores públicos
+// Service do panorama: busca de municípios (sem acento e sem diferenciar maiúsculas) e indicadores públicos
 @Service
-public class PanoramaBO {
+public class PanoramaService {
     private static final int MAX_RESULTADOS = 20;
 
-    private final MunicipioDAO municipioDAO;
-    private final IndicadorDAO indicadorDAO;
-    private final IndicadorMunicipioDAO valorDAO;
+    private final MunicipioRepository municipioRepository;
+    private final IndicadorRepository indicadorRepository;
+    private final IndicadorMunicipioRepository valorRepository;
 
     // Município com o nome já normalizado e a população, usada para ordenar a busca
     private record Item(Municipio municipio, String nome, long populacao) {
@@ -36,15 +36,15 @@ public class PanoramaBO {
     // A lista de municípios muda só com nova carga: fica em memória para a busca ser rápida
     private volatile List<Item> cacheMunicipios;
 
-    public PanoramaBO(MunicipioDAO municipioDAO, IndicadorDAO indicadorDAO, IndicadorMunicipioDAO valorDAO) {
-        this.municipioDAO = municipioDAO;
-        this.indicadorDAO = indicadorDAO;
-        this.valorDAO = valorDAO;
+    public PanoramaService(MunicipioRepository municipioRepository, IndicadorRepository indicadorRepository, IndicadorMunicipioRepository valorRepository) {
+        this.municipioRepository = municipioRepository;
+        this.indicadorRepository = indicadorRepository;
+        this.valorRepository = valorRepository;
     }
 
     @Transactional(readOnly = true)
     public List<PanoramaDTO.MunicipioResponse> buscarMunicipios(String busca) {
-        String termo = AssistenteBO.normalizar(busca);
+        String termo = AssistenteService.normalizar(busca);
         if (termo.length() < 2) {
             throw new RegraNegocioException("Digite pelo menos 2 letras do nome do município.");
         }
@@ -79,7 +79,7 @@ public class PanoramaBO {
         Municipio municipio = buscarEntidade(codigoIbge);
         Set<Long> jaIncluidos = new HashSet<>();
         List<PanoramaDTO.Valor> valores = new ArrayList<>();
-        for (IndicadorMunicipio v : valorDAO.buscarPorMunicipio(codigoIbge)) {
+        for (IndicadorMunicipio v : valorRepository.buscarPorMunicipio(codigoIbge)) {
             if (jaIncluidos.add(v.getIndicador().getId())) {
                 valores.add(PanoramaDTO.Valor.de(v));
             }
@@ -90,11 +90,11 @@ public class PanoramaBO {
 
     @Transactional(readOnly = true)
     public List<PanoramaDTO.IndicadorResponse> listarIndicadores() {
-        return indicadorDAO.findAllByOrderByIdAsc().stream().map(PanoramaDTO.IndicadorResponse::de).toList();
+        return indicadorRepository.findAllByOrderByIdAsc().stream().map(PanoramaDTO.IndicadorResponse::de).toList();
     }
 
     private Municipio buscarEntidade(Long codigoIbge) {
-        return municipioDAO.findById(codigoIbge)
+        return municipioRepository.findById(codigoIbge)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Município", codigoIbge));
     }
 
@@ -102,11 +102,11 @@ public class PanoramaBO {
         List<Item> lista = cacheMunicipios;
         if (lista == null) {
             Map<Long, Long> populacao = new HashMap<>();
-            for (Object[] linha : valorDAO.valoresDoIndicador("POPULACAO")) {
+            for (Object[] linha : valorRepository.valoresDoIndicador("POPULACAO")) {
                 populacao.put(((Number) linha[0]).longValue(), ((BigDecimal) linha[1]).longValue());
             }
-            lista = municipioDAO.findAllByOrderByNomeAsc().stream()
-                    .map(m -> new Item(m, AssistenteBO.normalizar(m.getNome()),
+            lista = municipioRepository.findAllByOrderByNomeAsc().stream()
+                    .map(m -> new Item(m, AssistenteService.normalizar(m.getNome()),
                             populacao.getOrDefault(m.getCodigoIbge(), 0L)))
                     .toList();
             cacheMunicipios = lista;

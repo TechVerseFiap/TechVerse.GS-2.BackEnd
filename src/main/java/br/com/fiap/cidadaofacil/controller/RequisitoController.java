@@ -1,6 +1,6 @@
 package br.com.fiap.cidadaofacil.controller;
 
-import br.com.fiap.cidadaofacil.bo.RequisitoBO;
+import br.com.fiap.cidadaofacil.service.RequisitoService;
 import br.com.fiap.cidadaofacil.dto.RequisitoDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -13,28 +13,28 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/requisitos")
 @Tag(name = "Requisitos", description = "Critérios publicados pela fonte oficial")
 public class RequisitoController {
-    private final RequisitoBO requisitoBO;
+    private final RequisitoService requisitoService;
 
-    public RequisitoController(RequisitoBO requisitoBO) {
-        this.requisitoBO = requisitoBO;
+    public RequisitoController(RequisitoService requisitoService) {
+        this.requisitoService = requisitoService;
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "Busca um requisito pelo id")
     public RequisitoDTO.Response buscar(@PathVariable Long id) {
-        return requisitoBO.buscarPorId(id);
+        return requisitoService.buscarPorId(id);
     }
 
     @PutMapping("/{id}")
     @Operation(summary = "Atualiza um requisito")
     public RequisitoDTO.Response atualizar(@PathVariable Long id, @RequestBody @Valid RequisitoDTO.Request req) {
-        return requisitoBO.atualizar(id, req);
+        return requisitoService.atualizar(id, req);
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Exclui um requisito")
     public ResponseEntity<Void> excluir(@PathVariable Long id) {
-        requisitoBO.excluir(id);
+        requisitoService.excluir(id);
         return ResponseEntity.noContent().build();
     }
 }

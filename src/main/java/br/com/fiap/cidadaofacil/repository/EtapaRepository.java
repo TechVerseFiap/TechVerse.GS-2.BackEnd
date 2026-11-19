@@ -1,4 +1,4 @@
-package br.com.fiap.cidadaofacil.dao;
+package br.com.fiap.cidadaofacil.repository;
 
 import br.com.fiap.cidadaofacil.model.Etapa;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -6,9 +6,9 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
-// DAO: acesso ao banco de etapas (Spring Data JPA gera o SQL)
+// Repository: acesso ao banco de etapas (Spring Data JPA gera o SQL)
 @Repository
-public interface EtapaDAO extends JpaRepository<Etapa, Long> {
+public interface EtapaRepository extends JpaRepository<Etapa, Long> {
     List<Etapa> findByServicoIdOrderByOrdemAsc(Long servicoId);
 
     boolean existsByServicoIdAndOrdem(Long servicoId, Integer ordem);

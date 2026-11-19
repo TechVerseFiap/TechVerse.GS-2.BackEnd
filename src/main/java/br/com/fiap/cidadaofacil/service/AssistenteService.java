@@ -1,8 +1,8 @@
-package br.com.fiap.cidadaofacil.bo;
+package br.com.fiap.cidadaofacil.service;
 
-import br.com.fiap.cidadaofacil.dao.CategoriaDAO;
-import br.com.fiap.cidadaofacil.dao.InteracaoDAO;
-import br.com.fiap.cidadaofacil.dao.ServicoDAO;
+import br.com.fiap.cidadaofacil.repository.CategoriaRepository;
+import br.com.fiap.cidadaofacil.repository.InteracaoRepository;
+import br.com.fiap.cidadaofacil.repository.ServicoRepository;
 import br.com.fiap.cidadaofacil.dto.AssistenteDTO;
 import br.com.fiap.cidadaofacil.exception.RecursoNaoEncontradoException;
 import br.com.fiap.cidadaofacil.model.Categoria;
@@ -19,9 +19,9 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-// BO do assistente: identifica a necessidade por palavras-chave e recomenda serviços do catálogo, sem inventar respostas
+// Service do assistente: identifica a necessidade por palavras-chave e recomenda serviços do catálogo, sem inventar respostas
 @Service
-public class AssistenteBO {
+public class AssistenteService {
     public static final String AVISO = "O Cidadão Fácil orienta, mas não confirma direitos nem concede benefícios. "
             + "Requisitos e decisões finais dependem do órgão responsável: confirme no canal oficial.";
 
@@ -30,28 +30,28 @@ public class AssistenteBO {
     private static final int PESO_CATEGORIA = 1;
     private static final String ASSUNTO_NAO_IDENTIFICADO = "NAO_IDENTIFICADO";
 
-    private final ServicoDAO servicoDAO;
-    private final CategoriaDAO categoriaDAO;
-    private final InteracaoDAO interacaoDAO;
+    private final ServicoRepository servicoRepository;
+    private final CategoriaRepository categoriaRepository;
+    private final InteracaoRepository interacaoRepository;
 
-    public AssistenteBO(ServicoDAO servicoDAO, CategoriaDAO categoriaDAO, InteracaoDAO interacaoDAO) {
-        this.servicoDAO = servicoDAO;
-        this.categoriaDAO = categoriaDAO;
-        this.interacaoDAO = interacaoDAO;
+    public AssistenteService(ServicoRepository servicoRepository, CategoriaRepository categoriaRepository, InteracaoRepository interacaoRepository) {
+        this.servicoRepository = servicoRepository;
+        this.categoriaRepository = categoriaRepository;
+        this.interacaoRepository = interacaoRepository;
     }
 
     @Transactional
     public AssistenteDTO.Resposta responder(AssistenteDTO.Pergunta pergunta) {
         String texto = " " + normalizar(pergunta.mensagem()) + " ";
 
-        List<Categoria> categorias = categoriaDAO.findAllByOrderByNomeAsc();
+        List<Categoria> categorias = categoriaRepository.findAllByOrderByNomeAsc();
         List<Categoria> categoriasCitadas = categorias.stream()
                 .filter(c -> citaCategoria(texto, c))
                 .toList();
 
         // 1. Pontua cada serviço ativo pelas palavras-chave encontradas no texto
         List<Candidato> candidatos = new ArrayList<>();
-        for (Servico servico : servicoDAO.findByStatus(StatusServico.ATIVO)) {
+        for (Servico servico : servicoRepository.findByStatus(StatusServico.ATIVO)) {
             List<String> encontradas = servico.listaPalavrasChave().stream()
                     .filter(p -> contemTermo(texto, normalizar(p)))
                     .toList();
@@ -78,7 +78,7 @@ public class AssistenteBO {
                         + String.join(", ", c.palavras()) + ".";
                 interacao.adicionarRecomendacao(new Recomendacao(c.servico(), justificativa, c.pontos()));
             }
-            interacaoDAO.save(interacao);
+            interacaoRepository.save(interacao);
 
             return montarResposta(interacao,
                     "Encontrei " + melhores.size() + " caminho(s) que podem ajudar. "
@@ -89,12 +89,12 @@ public class AssistenteBO {
         // 3. Só reconheceu a categoria: pede esclarecimento
         if (!categoriasCitadas.isEmpty()) {
             Categoria categoria = categoriasCitadas.get(0);
-            List<Servico> opcoes = servicoDAO.findByCategoriaIdAndStatusOrderByNomeAsc(categoria.getId(), StatusServico.ATIVO);
+            List<Servico> opcoes = servicoRepository.findByCategoriaIdAndStatusOrderByNomeAsc(categoria.getId(), StatusServico.ATIVO);
 
             Interacao interacao = new Interacao(categoria.getNome(), ResultadoInteracao.PEDIU_ESCLARECIMENTO);
             opcoes.stream().limit(5).forEach(s -> interacao.adicionarRecomendacao(new Recomendacao(
                     s, "Serviço da categoria " + categoria.getNome() + ".", PESO_CATEGORIA)));
-            interacaoDAO.save(interacao);
+            interacaoRepository.save(interacao);
 
             String mensagem = opcoes.isEmpty()
                     ? "Entendi que o assunto é " + categoria.getNome()
@@ -106,7 +106,7 @@ public class AssistenteBO {
 
         // 4. Nada encontrado: admite e sugere categorias
         Interacao interacao = new Interacao(ASSUNTO_NAO_IDENTIFICADO, ResultadoInteracao.NAO_ENCONTRADO);
-        interacaoDAO.save(interacao);
+        interacaoRepository.save(interacao);
         return montarResposta(interacao,
                 "Não encontrei no catálogo um serviço para o que você descreveu. "
                         + "Tente explicar com outras palavras ou escolha uma das categorias abaixo.",
@@ -116,7 +116,7 @@ public class AssistenteBO {
     // Histórico de interações e indicador de impacto
     @Transactional(readOnly = true)
     public List<AssistenteDTO.InteracaoResponse> listarInteracoes() {
-        return interacaoDAO.findAllByOrderByDataHoraDesc().stream()
+        return interacaoRepository.findAllByOrderByDataHoraDesc().stream()
                 .map(AssistenteDTO.InteracaoResponse::de)
                 .toList();
     }
@@ -128,22 +128,22 @@ public class AssistenteBO {
 
     @Transactional
     public void excluirInteracao(Long id) {
-        interacaoDAO.delete(buscarEntidade(id));
+        interacaoRepository.delete(buscarEntidade(id));
     }
 
     @Transactional(readOnly = true)
     public AssistenteDTO.Indicadores indicadores() {
-        long total = interacaoDAO.count();
-        long encontradas = interacaoDAO.countByResultado(ResultadoInteracao.ENCONTRADO);
-        long esclarecimento = interacaoDAO.countByResultado(ResultadoInteracao.PEDIU_ESCLARECIMENTO);
-        long naoEncontradas = interacaoDAO.countByResultado(ResultadoInteracao.NAO_ENCONTRADO);
+        long total = interacaoRepository.count();
+        long encontradas = interacaoRepository.countByResultado(ResultadoInteracao.ENCONTRADO);
+        long esclarecimento = interacaoRepository.countByResultado(ResultadoInteracao.PEDIU_ESCLARECIMENTO);
+        long naoEncontradas = interacaoRepository.countByResultado(ResultadoInteracao.NAO_ENCONTRADO);
         double taxa = total == 0 ? 0.0 : Math.round(encontradas * 1000.0 / total) / 10.0;
         return new AssistenteDTO.Indicadores(total, encontradas, esclarecimento, naoEncontradas, taxa);
     }
 
     // Apoio: montagem da resposta e tratamento do texto
     private Interacao buscarEntidade(Long id) {
-        return interacaoDAO.findById(id)
+        return interacaoRepository.findById(id)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Interação", id));
     }
 

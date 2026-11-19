@@ -1,7 +1,7 @@
-package br.com.fiap.cidadaofacil.bo;
+package br.com.fiap.cidadaofacil.service;
 
-import br.com.fiap.cidadaofacil.dao.CategoriaDAO;
-import br.com.fiap.cidadaofacil.dao.ServicoDAO;
+import br.com.fiap.cidadaofacil.repository.CategoriaRepository;
+import br.com.fiap.cidadaofacil.repository.ServicoRepository;
 import br.com.fiap.cidadaofacil.dto.CategoriaDTO;
 import br.com.fiap.cidadaofacil.exception.ConflitoException;
 import br.com.fiap.cidadaofacil.exception.RecursoNaoEncontradoException;
@@ -11,21 +11,21 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
-// BO: regras de negócio de categorias
+// Service: regras de negócio de categorias
 @Service
-public class CategoriaBO {
-    private final CategoriaDAO categoriaDAO;
-    private final ServicoDAO servicoDAO;
+public class CategoriaService {
+    private final CategoriaRepository categoriaRepository;
+    private final ServicoRepository servicoRepository;
 
-    public CategoriaBO(CategoriaDAO categoriaDAO, ServicoDAO servicoDAO) {
-        this.categoriaDAO = categoriaDAO;
-        this.servicoDAO = servicoDAO;
+    public CategoriaService(CategoriaRepository categoriaRepository, ServicoRepository servicoRepository) {
+        this.categoriaRepository = categoriaRepository;
+        this.servicoRepository = servicoRepository;
     }
 
     // Consultas
     @Transactional(readOnly = true)
     public List<CategoriaDTO.Response> listar() {
-        return categoriaDAO.findAllByOrderByNomeAsc().stream()
+        return categoriaRepository.findAllByOrderByNomeAsc().stream()
                 .map(CategoriaDTO.Response::de)
                 .toList();
     }
@@ -39,35 +39,35 @@ public class CategoriaBO {
     @Transactional
     public CategoriaDTO.Response criar(CategoriaDTO.Request req) {
         String nome = req.nome().trim();
-        if (categoriaDAO.existsByNomeIgnoreCase(nome)) {
+        if (categoriaRepository.existsByNomeIgnoreCase(nome)) {
             throw new ConflitoException("Já existe uma categoria com o nome '" + nome + "'.");
         }
         Categoria categoria = new Categoria(nome, descricaoOuNome(req.descricao(), nome));
-        return CategoriaDTO.Response.de(categoriaDAO.save(categoria));
+        return CategoriaDTO.Response.de(categoriaRepository.save(categoria));
     }
 
     @Transactional
     public CategoriaDTO.Response atualizar(Long id, CategoriaDTO.Request req) {
         Categoria categoria = buscarEntidade(id);
         String nome = req.nome().trim();
-        if (categoriaDAO.existsByNomeIgnoreCaseAndIdNot(nome, id)) {
+        if (categoriaRepository.existsByNomeIgnoreCaseAndIdNot(nome, id)) {
             throw new ConflitoException("Já existe outra categoria com o nome '" + nome + "'.");
         }
         categoria.setNome(nome);
         categoria.setDescricao(descricaoOuNome(req.descricao(), nome));
-        return CategoriaDTO.Response.de(categoriaDAO.save(categoria));
+        return CategoriaDTO.Response.de(categoriaRepository.save(categoria));
     }
 
     // Exclusão permitida só sem serviços vinculados
     @Transactional
     public void excluir(Long id) {
         Categoria categoria = buscarEntidade(id);
-        long qtd = servicoDAO.countByCategoriaId(id);
+        long qtd = servicoRepository.countByCategoriaId(id);
         if (qtd > 0) {
             throw new ConflitoException("A categoria '" + categoria.getNome() + "' possui " + qtd
                     + " serviço(s) vinculado(s). Mova ou exclua os serviços antes.");
         }
-        categoriaDAO.delete(categoria);
+        categoriaRepository.delete(categoria);
     }
 
     // A descrição é obrigatória no banco: se vier vazia, usa o próprio nome
@@ -75,10 +75,10 @@ public class CategoriaBO {
         return descricao == null || descricao.isBlank() ? nome : descricao.trim();
     }
 
-    // Busca a entidade ou lança 404 (usado pelos outros BOs)
+    // Busca a entidade ou lança 404 (usado pelos outros services)
     @Transactional(readOnly = true)
     public Categoria buscarEntidade(Long id) {
-        return categoriaDAO.findById(id)
+        return categoriaRepository.findById(id)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Categoria", id));
     }
 }

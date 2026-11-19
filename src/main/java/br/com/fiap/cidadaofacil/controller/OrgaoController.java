@@ -1,6 +1,6 @@
 package br.com.fiap.cidadaofacil.controller;
 
-import br.com.fiap.cidadaofacil.bo.OrgaoBO;
+import br.com.fiap.cidadaofacil.service.OrgaoService;
 import br.com.fiap.cidadaofacil.dto.OrgaoDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -17,28 +17,28 @@ import java.util.List;
 @RequestMapping("/api/orgaos")
 @Tag(name = "Órgãos", description = "Órgãos responsáveis pelo atendimento (federal, estadual ou municipal)")
 public class OrgaoController {
-    private final OrgaoBO orgaoBO;
+    private final OrgaoService orgaoService;
 
-    public OrgaoController(OrgaoBO orgaoBO) {
-        this.orgaoBO = orgaoBO;
+    public OrgaoController(OrgaoService orgaoService) {
+        this.orgaoService = orgaoService;
     }
 
     @GetMapping
     @Operation(summary = "Lista os órgãos")
     public List<OrgaoDTO.Response> listar() {
-        return orgaoBO.listar();
+        return orgaoService.listar();
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "Busca um órgão pelo id")
     public OrgaoDTO.Response buscar(@PathVariable Long id) {
-        return orgaoBO.buscarPorId(id);
+        return orgaoService.buscarPorId(id);
     }
 
     @PostMapping
     @Operation(summary = "Cadastra um órgão (sigla única)")
     public ResponseEntity<OrgaoDTO.Response> criar(@RequestBody @Valid OrgaoDTO.Request req) {
-        OrgaoDTO.Response criado = orgaoBO.criar(req);
+        OrgaoDTO.Response criado = orgaoService.criar(req);
         URI uri = ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}").buildAndExpand(criado.id()).toUri();
         return ResponseEntity.created(uri).body(criado);
     }
@@ -46,13 +46,13 @@ public class OrgaoController {
     @PutMapping("/{id}")
     @Operation(summary = "Atualiza um órgão")
     public OrgaoDTO.Response atualizar(@PathVariable Long id, @RequestBody @Valid OrgaoDTO.Request req) {
-        return orgaoBO.atualizar(id, req);
+        return orgaoService.atualizar(id, req);
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Exclui um órgão (somente se não for responsável por serviços)")
     public ResponseEntity<Void> excluir(@PathVariable Long id) {
-        orgaoBO.excluir(id);
+        orgaoService.excluir(id);
         return ResponseEntity.noContent().build();
     }
 }

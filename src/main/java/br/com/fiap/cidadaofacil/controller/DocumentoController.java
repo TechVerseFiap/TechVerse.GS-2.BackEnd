@@ -1,6 +1,6 @@
 package br.com.fiap.cidadaofacil.controller;
 
-import br.com.fiap.cidadaofacil.bo.DocumentoBO;
+import br.com.fiap.cidadaofacil.service.DocumentoService;
 import br.com.fiap.cidadaofacil.dto.DocumentoDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -17,28 +17,28 @@ import java.util.List;
 @RequestMapping("/api/documentos")
 @Tag(name = "Documentos", description = "Tipos de documento que os serviços podem exigir")
 public class DocumentoController {
-    private final DocumentoBO documentoBO;
+    private final DocumentoService documentoService;
 
-    public DocumentoController(DocumentoBO documentoBO) {
-        this.documentoBO = documentoBO;
+    public DocumentoController(DocumentoService documentoService) {
+        this.documentoService = documentoService;
     }
 
     @GetMapping
     @Operation(summary = "Lista todos os documentos")
     public List<DocumentoDTO.Response> listar() {
-        return documentoBO.listar();
+        return documentoService.listar();
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "Busca um documento pelo id")
     public DocumentoDTO.Response buscar(@PathVariable Long id) {
-        return documentoBO.buscarPorId(id);
+        return documentoService.buscarPorId(id);
     }
 
     @PostMapping
     @Operation(summary = "Cadastra um documento")
     public ResponseEntity<DocumentoDTO.Response> criar(@RequestBody @Valid DocumentoDTO.Request req) {
-        DocumentoDTO.Response criado = documentoBO.criar(req);
+        DocumentoDTO.Response criado = documentoService.criar(req);
         URI uri = ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}").buildAndExpand(criado.id()).toUri();
         return ResponseEntity.created(uri).body(criado);
     }
@@ -46,13 +46,13 @@ public class DocumentoController {
     @PutMapping("/{id}")
     @Operation(summary = "Atualiza um documento")
     public DocumentoDTO.Response atualizar(@PathVariable Long id, @RequestBody @Valid DocumentoDTO.Request req) {
-        return documentoBO.atualizar(id, req);
+        return documentoService.atualizar(id, req);
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Exclui um documento (somente se não estiver vinculado a serviços)")
     public ResponseEntity<Void> excluir(@PathVariable Long id) {
-        documentoBO.excluir(id);
+        documentoService.excluir(id);
         return ResponseEntity.noContent().build();
     }
 }

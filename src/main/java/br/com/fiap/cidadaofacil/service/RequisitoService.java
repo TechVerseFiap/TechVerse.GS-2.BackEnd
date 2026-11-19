@@ -1,6 +1,6 @@
-package br.com.fiap.cidadaofacil.bo;
+package br.com.fiap.cidadaofacil.service;
 
-import br.com.fiap.cidadaofacil.dao.RequisitoDAO;
+import br.com.fiap.cidadaofacil.repository.RequisitoRepository;
 import br.com.fiap.cidadaofacil.dto.RequisitoDTO;
 import br.com.fiap.cidadaofacil.exception.RecursoNaoEncontradoException;
 import br.com.fiap.cidadaofacil.model.Requisito;
@@ -10,21 +10,21 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
-// BO: regras de negócio de requisitos de um serviço
+// Service: regras de negócio de requisitos de um serviço
 @Service
-public class RequisitoBO {
-    private final RequisitoDAO requisitoDAO;
-    private final ServicoBO servicoBO;
+public class RequisitoService {
+    private final RequisitoRepository requisitoRepository;
+    private final ServicoService servicoService;
 
-    public RequisitoBO(RequisitoDAO requisitoDAO, ServicoBO servicoBO) {
-        this.requisitoDAO = requisitoDAO;
-        this.servicoBO = servicoBO;
+    public RequisitoService(RequisitoRepository requisitoRepository, ServicoService servicoService) {
+        this.requisitoRepository = requisitoRepository;
+        this.servicoService = servicoService;
     }
 
     @Transactional(readOnly = true)
     public List<RequisitoDTO.Response> listarDoServico(Long servicoId) {
-        servicoBO.buscarEntidade(servicoId);
-        return requisitoDAO.findByServicoIdOrderByIdAsc(servicoId).stream()
+        servicoService.buscarEntidade(servicoId);
+        return requisitoRepository.findByServicoIdOrderByIdAsc(servicoId).stream()
                 .map(RequisitoDTO.Response::de)
                 .toList();
     }
@@ -36,28 +36,28 @@ public class RequisitoBO {
 
     @Transactional
     public RequisitoDTO.Response adicionar(Long servicoId, RequisitoDTO.Request req) {
-        Servico servico = servicoBO.buscarEntidade(servicoId);
+        Servico servico = servicoService.buscarEntidade(servicoId);
         Requisito requisito = new Requisito(req.descricao().trim());
         servico.adicionarRequisito(requisito);
-        return RequisitoDTO.Response.de(requisitoDAO.save(requisito));
+        return RequisitoDTO.Response.de(requisitoRepository.save(requisito));
     }
 
     @Transactional
     public RequisitoDTO.Response atualizar(Long id, RequisitoDTO.Request req) {
         Requisito requisito = buscarEntidade(id);
         requisito.setDescricao(req.descricao().trim());
-        return RequisitoDTO.Response.de(requisitoDAO.save(requisito));
+        return RequisitoDTO.Response.de(requisitoRepository.save(requisito));
     }
 
     @Transactional
     public void excluir(Long id) {
         Requisito requisito = buscarEntidade(id);
         requisito.getServico().getRequisitos().remove(requisito);
-        requisitoDAO.delete(requisito);
+        requisitoRepository.delete(requisito);
     }
 
     private Requisito buscarEntidade(Long id) {
-        return requisitoDAO.findById(id)
+        return requisitoRepository.findById(id)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Requisito", id));
     }
 }

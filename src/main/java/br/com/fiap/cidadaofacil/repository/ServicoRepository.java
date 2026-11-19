@@ -1,4 +1,4 @@
-package br.com.fiap.cidadaofacil.dao;
+package br.com.fiap.cidadaofacil.repository;
 
 import br.com.fiap.cidadaofacil.model.Servico;
 import br.com.fiap.cidadaofacil.model.StatusServico;
@@ -9,9 +9,9 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
-// DAO: acesso ao banco de serviços (Spring Data JPA gera o SQL)
+// Repository: acesso ao banco de serviços (Spring Data JPA gera o SQL)
 @Repository
-public interface ServicoDAO extends JpaRepository<Servico, Long> {
+public interface ServicoRepository extends JpaRepository<Servico, Long> {
     List<Servico> findByCategoriaIdOrderByNomeAsc(Long categoriaId);
 
     List<Servico> findByCategoriaIdAndStatusOrderByNomeAsc(Long categoriaId, StatusServico status);

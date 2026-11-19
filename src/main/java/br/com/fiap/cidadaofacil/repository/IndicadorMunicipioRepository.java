@@ -1,4 +1,4 @@
-package br.com.fiap.cidadaofacil.dao;
+package br.com.fiap.cidadaofacil.repository;
 
 import br.com.fiap.cidadaofacil.model.IndicadorMunicipio;
 import br.com.fiap.cidadaofacil.model.IndicadorMunicipioId;
@@ -9,9 +9,9 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
-// DAO: valores dos indicadores por município (busca com indicador e fonte em uma única consulta)
+// Repository: valores dos indicadores por município (busca com indicador e fonte em uma única consulta)
 @Repository
-public interface IndicadorMunicipioDAO extends JpaRepository<IndicadorMunicipio, IndicadorMunicipioId> {
+public interface IndicadorMunicipioRepository extends JpaRepository<IndicadorMunicipio, IndicadorMunicipioId> {
     @Query("""
             SELECT v FROM IndicadorMunicipio v
             JOIN FETCH v.indicador i

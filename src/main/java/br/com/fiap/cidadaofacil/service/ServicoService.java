@@ -1,11 +1,11 @@
-package br.com.fiap.cidadaofacil.bo;
+package br.com.fiap.cidadaofacil.service;
 
-import br.com.fiap.cidadaofacil.dao.DocumentoDAO;
-import br.com.fiap.cidadaofacil.dao.FonteDAO;
-import br.com.fiap.cidadaofacil.dao.OrgaoDAO;
-import br.com.fiap.cidadaofacil.dao.RecomendacaoDAO;
-import br.com.fiap.cidadaofacil.dao.ServicoDAO;
-import br.com.fiap.cidadaofacil.dao.ServicoDocumentoDAO;
+import br.com.fiap.cidadaofacil.repository.DocumentoRepository;
+import br.com.fiap.cidadaofacil.repository.FonteRepository;
+import br.com.fiap.cidadaofacil.repository.OrgaoRepository;
+import br.com.fiap.cidadaofacil.repository.RecomendacaoRepository;
+import br.com.fiap.cidadaofacil.repository.ServicoRepository;
+import br.com.fiap.cidadaofacil.repository.ServicoDocumentoRepository;
 import br.com.fiap.cidadaofacil.dto.DocumentoDTO;
 import br.com.fiap.cidadaofacil.dto.ServicoDTO;
 import br.com.fiap.cidadaofacil.exception.ConflitoException;
@@ -24,44 +24,44 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Arrays;
 import java.util.List;
 
-// BO: regras de negócio de serviços, com órgão, fonte oficial, canais e documentos
+// Service: regras de negócio de serviços, com órgão, fonte oficial, canais e documentos
 @Service
-public class ServicoBO {
+public class ServicoService {
     static final String PUBLICO_PADRAO = "Público geral. Confira os critérios na fonte oficial.";
     static final String ENDERECO_PRESENCIAL_PADRAO = "Atendimento presencial: consulte o órgão responsável.";
 
-    private final ServicoDAO servicoDAO;
-    private final DocumentoDAO documentoDAO;
-    private final ServicoDocumentoDAO servicoDocumentoDAO;
-    private final RecomendacaoDAO recomendacaoDAO;
-    private final OrgaoDAO orgaoDAO;
-    private final FonteDAO fonteDAO;
-    private final CategoriaBO categoriaBO;
+    private final ServicoRepository servicoRepository;
+    private final DocumentoRepository documentoRepository;
+    private final ServicoDocumentoRepository servicoDocumentoRepository;
+    private final RecomendacaoRepository recomendacaoRepository;
+    private final OrgaoRepository orgaoRepository;
+    private final FonteRepository fonteRepository;
+    private final CategoriaService categoriaService;
 
-    public ServicoBO(ServicoDAO servicoDAO, DocumentoDAO documentoDAO, ServicoDocumentoDAO servicoDocumentoDAO,
-                     RecomendacaoDAO recomendacaoDAO, OrgaoDAO orgaoDAO, FonteDAO fonteDAO, CategoriaBO categoriaBO) {
-        this.servicoDAO = servicoDAO;
-        this.documentoDAO = documentoDAO;
-        this.servicoDocumentoDAO = servicoDocumentoDAO;
-        this.recomendacaoDAO = recomendacaoDAO;
-        this.orgaoDAO = orgaoDAO;
-        this.fonteDAO = fonteDAO;
-        this.categoriaBO = categoriaBO;
+    public ServicoService(ServicoRepository servicoRepository, DocumentoRepository documentoRepository, ServicoDocumentoRepository servicoDocumentoRepository,
+                     RecomendacaoRepository recomendacaoRepository, OrgaoRepository orgaoRepository, FonteRepository fonteRepository, CategoriaService categoriaService) {
+        this.servicoRepository = servicoRepository;
+        this.documentoRepository = documentoRepository;
+        this.servicoDocumentoRepository = servicoDocumentoRepository;
+        this.recomendacaoRepository = recomendacaoRepository;
+        this.orgaoRepository = orgaoRepository;
+        this.fonteRepository = fonteRepository;
+        this.categoriaService = categoriaService;
     }
 
     // Consultas com filtros opcionais de categoria e texto
     @Transactional(readOnly = true)
     public List<ServicoDTO.Resumo> listar(Long categoriaId, String busca) {
         if (categoriaId != null) {
-            categoriaBO.buscarEntidade(categoriaId);
+            categoriaService.buscarEntidade(categoriaId);
         }
         List<Servico> servicos;
         if (busca != null && !busca.isBlank()) {
-            servicos = servicoDAO.buscarPorTexto(busca.trim(), categoriaId);
+            servicos = servicoRepository.buscarPorTexto(busca.trim(), categoriaId);
         } else if (categoriaId != null) {
-            servicos = servicoDAO.findByCategoriaIdOrderByNomeAsc(categoriaId);
+            servicos = servicoRepository.findByCategoriaIdOrderByNomeAsc(categoriaId);
         } else {
-            servicos = servicoDAO.findAllByOrderByNomeAsc();
+            servicos = servicoRepository.findAllByOrderByNomeAsc();
         }
         return servicos.stream().map(ServicoDTO.Resumo::de).toList();
     }
@@ -76,33 +76,33 @@ public class ServicoBO {
     public ServicoDTO.Detalhe criar(ServicoDTO.Request req) {
         Servico servico = new Servico();
         preencher(servico, req);
-        return ServicoDTO.Detalhe.de(servicoDAO.save(servico));
+        return ServicoDTO.Detalhe.de(servicoRepository.save(servico));
     }
 
     @Transactional
     public ServicoDTO.Detalhe atualizar(Long id, ServicoDTO.Request req) {
         Servico servico = buscarEntidade(id);
         preencher(servico, req);
-        return ServicoDTO.Detalhe.de(servicoDAO.save(servico));
+        return ServicoDTO.Detalhe.de(servicoRepository.save(servico));
     }
 
     // Exclusão bloqueada se o serviço já está no histórico do assistente
     @Transactional
     public void excluir(Long id) {
         Servico servico = buscarEntidade(id);
-        if (recomendacaoDAO.existsByServicoId(id)) {
+        if (recomendacaoRepository.existsByServicoId(id)) {
             throw new ConflitoException("O serviço '" + servico.getNome()
                     + "' já foi recomendado pelo assistente e faz parte do histórico. "
                     + "Para tirá-lo do catálogo, marque-o como inativo.");
         }
-        servicoDAO.delete(servico);
+        servicoRepository.delete(servico);
     }
 
     // Vínculo de documentos com o serviço
     @Transactional(readOnly = true)
     public List<DocumentoDTO.DoServico> listarDocumentos(Long servicoId) {
         buscarEntidade(servicoId);
-        return servicoDocumentoDAO.findByServicoId(servicoId).stream()
+        return servicoDocumentoRepository.findByServicoId(servicoId).stream()
                 .map(DocumentoDTO.DoServico::de)
                 .toList();
     }
@@ -110,14 +110,14 @@ public class ServicoBO {
     @Transactional
     public DocumentoDTO.DoServico vincularDocumento(Long servicoId, DocumentoDTO.Vinculo req) {
         Servico servico = buscarEntidade(servicoId);
-        Documento documento = documentoDAO.findById(req.documentoId())
+        Documento documento = documentoRepository.findById(req.documentoId())
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Documento", req.documentoId()));
-        if (servicoDocumentoDAO.existsByServicoIdAndDocumentoId(servicoId, req.documentoId())) {
+        if (servicoDocumentoRepository.existsByServicoIdAndDocumentoId(servicoId, req.documentoId())) {
             throw new ConflitoException("O documento '" + documento.getNome() + "' já está vinculado a este serviço.");
         }
         boolean obrigatorio = req.obrigatorio() == null || req.obrigatorio();
         ServicoDocumento vinculo = new ServicoDocumento(servico, documento, obrigatorio, req.observacao());
-        return DocumentoDTO.DoServico.de(servicoDocumentoDAO.save(vinculo));
+        return DocumentoDTO.DoServico.de(servicoDocumentoRepository.save(vinculo));
     }
 
     @Transactional
@@ -128,7 +128,7 @@ public class ServicoBO {
         if (req.obrigatorio() != null) {
             vinculo.setObrigatorio(req.obrigatorio());
         }
-        return DocumentoDTO.DoServico.de(servicoDocumentoDAO.save(vinculo));
+        return DocumentoDTO.DoServico.de(servicoDocumentoRepository.save(vinculo));
     }
 
     @Transactional
@@ -136,18 +136,18 @@ public class ServicoBO {
         Servico servico = buscarEntidade(servicoId);
         ServicoDocumento vinculo = buscarVinculo(servicoId, documentoId);
         servico.getDocumentos().remove(vinculo);
-        servicoDocumentoDAO.delete(vinculo);
+        servicoDocumentoRepository.delete(vinculo);
     }
 
     // Apoio: busca a entidade ou lança 404
     @Transactional(readOnly = true)
     public Servico buscarEntidade(Long id) {
-        return servicoDAO.findById(id)
+        return servicoRepository.findById(id)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Serviço", id));
     }
 
     private ServicoDocumento buscarVinculo(Long servicoId, Long documentoId) {
-        return servicoDocumentoDAO.findByServicoIdAndDocumentoId(servicoId, documentoId)
+        return servicoDocumentoRepository.findByServicoIdAndDocumentoId(servicoId, documentoId)
                 .orElseThrow(() -> new RegraNegocioException(
                         "O documento " + documentoId + " não está vinculado ao serviço " + servicoId + "."));
     }
@@ -157,7 +157,7 @@ public class ServicoBO {
         String url = req.urlFonte().trim();
         validarFonte(url);
 
-        servico.setCategoria(categoriaBO.buscarEntidade(req.categoriaId()));
+        servico.setCategoria(categoriaService.buscarEntidade(req.categoriaId()));
         servico.setOrgao(resolverOrgao(req));
         servico.setNome(req.nome().trim());
         servico.setDescricao(req.descricao().trim());
@@ -172,25 +172,25 @@ public class ServicoBO {
     // Órgão por id; se não vier, procura pelo nome ou sigla já cadastrados
     private Orgao resolverOrgao(ServicoDTO.Request req) {
         if (req.orgaoId() != null) {
-            return orgaoDAO.findById(req.orgaoId())
+            return orgaoRepository.findById(req.orgaoId())
                     .orElseThrow(() -> new RecursoNaoEncontradoException("Órgão", req.orgaoId()));
         }
         String texto = req.orgaoResponsavel() == null ? "" : req.orgaoResponsavel().trim();
         if (texto.isEmpty()) {
             throw new RegraNegocioException("Informe o órgão responsável (orgaoId).");
         }
-        return orgaoDAO.findFirstByNomeIgnoreCaseOrSiglaIgnoreCase(texto, texto)
+        return orgaoRepository.findFirstByNomeIgnoreCaseOrSiglaIgnoreCase(texto, texto)
                 .orElseThrow(() -> new RegraNegocioException("O órgão '" + texto
                         + "' não está cadastrado. Cadastre-o em /api/orgaos e informe o orgaoId."));
     }
 
     // Reaproveita a fonte pela URL (atualizando a data de verificação) ou cria uma nova fonte oficial
     private Fonte registrarFonte(String url, java.time.LocalDate dataVerificacao, String nomeServico) {
-        Fonte fonte = fonteDAO.findByUrl(url).orElseGet(() -> new Fonte(
+        Fonte fonte = fonteRepository.findByUrl(url).orElseGet(() -> new Fonte(
                 limitar("Fonte oficial - " + nomeServico, 150), url, TipoFonte.OFICIAL, dataVerificacao));
         fonte.setTipo(TipoFonte.OFICIAL);
         fonte.setDataConsulta(dataVerificacao);
-        return fonteDAO.save(fonte);
+        return fonteRepository.save(fonte);
     }
 
     // Regra central: toda orientação precisa de fonte oficial com https
