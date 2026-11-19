@@ -1,5 +1,6 @@
 package br.com.fiap.cidadaofacil.service;
 
+import br.com.fiap.cidadaofacil.dto.CatalogoGovBrDTO;
 import br.com.fiap.cidadaofacil.dto.PanoramaDTO;
 import br.com.fiap.cidadaofacil.dto.SincronizacaoDTO;
 import br.com.fiap.cidadaofacil.exception.ConflitoException;
@@ -33,8 +34,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-// Service: traz os indicadores do panorama da Base dos Dados (SQL no BigQuery) e grava no Oracle.
-// As telas continuam lendo do Oracle, que fica rápido para o cidadão; a Base dos Dados é a fonte que alimenta o banco.
+// Service: sincronização das fontes oficiais com o Oracle, em segundo plano:
+// 1) catálogo de serviços do gov.br (CatalogoGovBrService); 2) indicadores do panorama da Base dos Dados (SQL no BigQuery).
+// As telas continuam lendo do Oracle, que fica rápido para o cidadão; as fontes oficiais alimentam o banco.
 @Service
 public class SincronizacaoService {
     private static final Logger log = LoggerFactory.getLogger(SincronizacaoService.class);
@@ -84,62 +86,116 @@ public class SincronizacaoService {
     private final IndicadorRepository indicadorRepository;
     private final IndicadorMunicipioRepository valorRepository;
     private final PanoramaService panoramaService;
+    private final CatalogoGovBrService catalogoService;
     private final TransactionTemplate transacao;
     private final String uf;
     private final boolean sincronizarAoIniciar;
     private final int diasValidade;
+    private final boolean catalogoAoIniciar;
 
-    // Uma sincronização por vez; guarda o último resultado para o painel
+    // Uma sincronização por vez; guarda etapa, progresso e o último resultado de cada parte para o painel
     private final AtomicBoolean emAndamento = new AtomicBoolean(false);
+    private volatile String etapaAtual;
+    private volatile String progresso;
+    private volatile CatalogoGovBrDTO.Resultado ultimoCatalogo;
+    private volatile String erroCatalogo;
     private volatile SincronizacaoDTO.Resultado ultimoResultado;
     private volatile String ultimoErro;
 
     public SincronizacaoService(BaseDosDadosRepository baseDosDados, MunicipioRepository municipioRepository,
                                 IndicadorRepository indicadorRepository, IndicadorMunicipioRepository valorRepository,
-                                PanoramaService panoramaService, TransactionTemplate transacao,
+                                PanoramaService panoramaService, CatalogoGovBrService catalogoService,
+                                TransactionTemplate transacao,
                                 @Value("${basedosdados.uf:SP}") String uf,
                                 @Value("${basedosdados.sincronizar-ao-iniciar:true}") boolean sincronizarAoIniciar,
-                                @Value("${basedosdados.dias-validade:7}") int diasValidade) {
+                                @Value("${basedosdados.dias-validade:7}") int diasValidade,
+                                @Value("${govbr.sincronizar-ao-iniciar:true}") boolean catalogoAoIniciar) {
         this.baseDosDados = baseDosDados;
         this.municipioRepository = municipioRepository;
         this.indicadorRepository = indicadorRepository;
         this.valorRepository = valorRepository;
         this.panoramaService = panoramaService;
+        this.catalogoService = catalogoService;
         this.transacao = transacao;
         this.uf = uf.trim().toUpperCase();
         this.sincronizarAoIniciar = sincronizarAoIniciar;
         this.diasValidade = diasValidade;
+        this.catalogoAoIniciar = catalogoAoIniciar;
     }
 
     public SincronizacaoDTO.Status status() {
-        return new SincronizacaoDTO.Status(baseDosDados.estaConfigurado(), emAndamento.get(), uf,
-                ultimoResultado, ultimoErro);
+        return new SincronizacaoDTO.Status(baseDosDados.estaConfigurado(), emAndamento.get(), etapaAtual, progresso,
+                uf, ultimoCatalogo, erroCatalogo, ultimoResultado, ultimoErro);
     }
 
-    // Ao subir a API: se os dados tiverem mais de N dias, atualiza em segundo plano (a API já responde enquanto isso)
+    // Ao subir a API: atualiza em segundo plano o que estiver desatualizado (a API já responde enquanto isso)
     @EventListener(ApplicationReadyEvent.class)
     public void aoIniciar() {
-        if (!sincronizarAoIniciar || !baseDosDados.estaConfigurado()) {
-            return;
-        }
+        boolean catalogo = catalogoAoIniciar && catalogoService.precisaAtualizar();
         LocalDate maisAntiga = indicadorRepository.dataConsultaMaisAntiga();
-        if (maisAntiga != null && maisAntiga.isAfter(LocalDate.now(FUSO).minusDays(diasValidade))) {
-            log.info("Indicadores consultados na Base dos Dados em {}: sincronização não é necessária.", maisAntiga);
-            return;
+        boolean indicadores = sincronizarAoIniciar && baseDosDados.estaConfigurado()
+                && (maisAntiga == null || !maisAntiga.isAfter(LocalDate.now(FUSO).minusDays(diasValidade)));
+        if (catalogo || indicadores) {
+            log.info("Sincronização automática: catálogo gov.br = {}, indicadores Base dos Dados = {}", catalogo, indicadores);
+            iniciar(catalogo, indicadores);
         }
-        Thread.ofVirtual().name("sincronizacao-base-dos-dados").start(() -> {
-            try {
-                sincronizar();
-            } catch (RuntimeException e) {
-                log.warn("Sincronização automática com a Base dos Dados falhou: {}", e.getMessage());
-            }
-        });
     }
 
-    public SincronizacaoDTO.Resultado sincronizar() {
+    // POST /api/sincronizacao: roda as duas partes em segundo plano; o painel acompanha pelo GET
+    public SincronizacaoDTO.Status iniciar() {
+        return iniciar(true, true);
+    }
+
+    private SincronizacaoDTO.Status iniciar(boolean catalogo, boolean indicadores) {
         if (!emAndamento.compareAndSet(false, true)) {
-            throw new ConflitoException("Já existe uma sincronização com a Base dos Dados em andamento.");
+            throw new ConflitoException("Já existe uma sincronização em andamento.");
         }
+        etapaAtual = "Preparando";
+        Thread.ofVirtual().name("sincronizacao").start(() -> executar(catalogo, indicadores));
+        return status();
+    }
+
+    private void executar(boolean catalogo, boolean indicadores) {
+        try {
+            if (catalogo) {
+                etapaAtual = "Catálogo de serviços do gov.br";
+                try {
+                    ultimoCatalogo = catalogoService.sincronizar(p -> progresso = p);
+                    erroCatalogo = null;
+                } catch (RuntimeException e) {
+                    erroCatalogo = e.getMessage();
+                    log.warn("Sincronização do catálogo do gov.br falhou: {}", e.getMessage());
+                }
+            }
+            if (indicadores) {
+                etapaAtual = "Indicadores da Base dos Dados";
+                progresso = "Consultando o BigQuery da Base dos Dados...";
+                try {
+                    executarIndicadores();
+                } catch (RuntimeException e) {
+                    log.warn("Sincronização com a Base dos Dados falhou: {}", e.getMessage());
+                }
+            }
+        } finally {
+            etapaAtual = null;
+            progresso = null;
+            emAndamento.set(false);
+        }
+    }
+
+    // Só os indicadores, de forma síncrona (usado nos testes)
+    public SincronizacaoDTO.Resultado sincronizarIndicadores() {
+        if (!emAndamento.compareAndSet(false, true)) {
+            throw new ConflitoException("Já existe uma sincronização em andamento.");
+        }
+        try {
+            return executarIndicadores();
+        } finally {
+            emAndamento.set(false);
+        }
+    }
+
+    private SincronizacaoDTO.Resultado executarIndicadores() {
         try {
             LocalDateTime inicio = LocalDateTime.now(FUSO);
             log.info("Sincronizando o panorama ({}) com a Base dos Dados...", uf);
@@ -163,8 +219,6 @@ public class SincronizacaoService {
         } catch (RuntimeException e) {
             ultimoErro = e.getMessage();
             throw e;
-        } finally {
-            emAndamento.set(false);
         }
     }
 

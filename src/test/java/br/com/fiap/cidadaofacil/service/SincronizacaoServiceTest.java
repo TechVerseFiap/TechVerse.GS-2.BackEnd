@@ -21,7 +21,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 // Testa a gravação da sincronização no banco H2 (perfil dev), trocando o BigQuery por respostas fixas
-@SpringBootTest
+@SpringBootTest(properties = "govbr.sincronizar-ao-iniciar=false")
 @ActiveProfiles("dev")
 class SincronizacaoServiceTest {
     private static final long CAIEIRAS = 3509007L;
@@ -54,7 +54,7 @@ class SincronizacaoServiceTest {
                     java.util.Arrays.asList(null, "99"));
         });
 
-        SincronizacaoDTO.Resultado resultado = sincronizacaoService.sincronizar();
+        SincronizacaoDTO.Resultado resultado = sincronizacaoService.sincronizarIndicadores();
 
         assertEquals(1, resultado.municipiosNovos());
         assertEquals(5, resultado.indicadores().size());
@@ -89,7 +89,7 @@ class SincronizacaoServiceTest {
             }
             return List.of(List.of(String.valueOf(CAIEIRAS), "200"));
         });
-        SincronizacaoDTO.Resultado segunda = sincronizacaoService.sincronizar();
+        SincronizacaoDTO.Resultado segunda = sincronizacaoService.sincronizarIndicadores();
         assertEquals(0, segunda.municipiosNovos());
         segunda.indicadores().forEach(i -> {
             assertEquals(0, i.novas());
@@ -101,7 +101,7 @@ class SincronizacaoServiceTest {
     void semCredenciaisRespondeServicoIndisponivel() {
         when(baseDosDados.consultar(anyString(), anyMap()))
                 .thenThrow(new ServicoIndisponivelException("não configurada"));
-        assertThrows(ServicoIndisponivelException.class, () -> sincronizacaoService.sincronizar());
+        assertThrows(ServicoIndisponivelException.class, () -> sincronizacaoService.sincronizarIndicadores());
         assertEquals("não configurada", sincronizacaoService.status().ultimoErro());
     }
 }
