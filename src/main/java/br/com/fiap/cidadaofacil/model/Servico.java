@@ -63,7 +63,8 @@ public class Servico {
     private List<ServicoDocumento> documentos = new ArrayList<>();
 
     @OneToMany(mappedBy = "servico", cascade = CascadeType.ALL, orphanRemoval = true)
-    @OrderBy("tipo ASC")
+    // Por tipo e, dentro do tipo, na ordem de cadastro: o primeiro canal digital é o botão "Iniciar" do gov.br
+    @OrderBy("tipo ASC, id ASC")
     private List<Canal> canais = new ArrayList<>();
 
     public Servico() {

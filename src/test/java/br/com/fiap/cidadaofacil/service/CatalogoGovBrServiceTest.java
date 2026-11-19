@@ -80,6 +80,8 @@ class CatalogoGovBrServiceTest {
         assertEquals("Ministério dos Transportes", detalhe.orgaoResponsavel());
         assertEquals(GovBrRepository.PREFIXO_SERVICO + CNH, detalhe.urlFonte());
         assertTrue(detalhe.requisitos().stream().anyMatch(q -> q.descricao().contains("QR Code")));
+        // O primeiro canal digital é o link do botão "Iniciar" (é ele que o site usa no botão do pedido)
+        assertEquals("https://www.gov.br/pt-br/apps/carteira-digital-de-transito-1", detalhe.canais().get(0).endereco());
 
         // O assistente passa a encontrar o serviço novo pela sigla que estava só no endereço
         AssistenteDTO.Resposta resposta = assistenteService.responder(new AssistenteDTO.Pergunta("quero tirar a cnh digital"));
