@@ -24,7 +24,7 @@
 3. **Transparência:** todo serviço tem URL oficial (https obrigatório) e data de verificação; informações com mais de 180 dias são sinalizadas (`precisaReverificacao`).
 4. **Privacidade:** o texto digitado pelo cidadão **não é salvo**, apenas o assunto identificado e o resultado (base do indicador de impacto).
 5. **Honestidade:** quando não encontra nada, o assistente admite e sugere categorias; nunca afirma que a pessoa "tem direito".
-6. **Panorama do município:** indicadores públicos reais dos 645 municípios de SP (população, saldo de empregos formais, Bolsa Família e estabelecimentos do SUS), extraídos da [Base dos Dados](https://basedosdados.org) com fonte e período. Só números agregados, sem dados pessoais.
+6. **Panorama do município:** indicadores públicos reais dos 645 municípios de SP (população, saldo de empregos formais, Bolsa Família e estabelecimentos do SUS). A fonte é a [Base dos Dados](https://basedosdados.org): a API roda SQL no BigQuery da Base dos Dados e grava o período mais recente no Oracle (veja [Integração com a Base dos Dados](#integração-com-a-base-dos-dados)). Só números agregados, sem dados pessoais.
 
 ## Banco de dados: o mesmo modelo da disciplina de Database
 
@@ -50,11 +50,12 @@ CATEGORIA ─┐        ORGAO ─┐        FONTE ─┬────────
 - A data de verificação de um serviço é a `DT_CONSULTA` da sua `FONTE`.
 - O resultado da interação é gravado como `COM_RESULTADO`, `PEDIU_ESCLARECIMENTO` ou `SEM_RESULTADO` (conversor JPA).
 
-## Arquitetura em camadas
+## Arquitetura em camadas (Model, Service, Controller + Repository)
 
 ```
-controller  →  bo  →  dao  →  Oracle
-   (HTTP)    (regras) (acesso a dados)
+controller  →  service  →  repository  →  Oracle
+   (HTTP)       (regras)    (acesso a dados)
+                    └────→  BaseDosDadosRepository  →  BigQuery (Base dos Dados)
      ↑
  exception (GlobalExceptionHandler: transforma erros em JSON padronizado)
 ```
@@ -62,31 +63,33 @@ controller  →  bo  →  dao  →  Oracle
 | Pacote | Responsabilidade |
 |---|---|
 | `model` | Entidades do domínio mapeadas para as 14 tabelas do modelo de Database (JPA) |
-| `dao` | Interfaces Spring Data JPA: acesso ao banco (findBy..., existsBy...) |
-| `bo` | Regras de negócio (nome duplicado, fonte https, ordem de etapas, lógica do assistente) |
+| `repository` | Acesso a dados (papel do DAO): interfaces Spring Data JPA para o Oracle (findBy..., existsBy...) e `BaseDosDadosRepository`, que roda SQL no BigQuery |
+| `service` | Regras de negócio (papel do BO): nome duplicado, fonte https, ordem de etapas, lógica do assistente, sincronização com a Base dos Dados |
 | `controller` | Endpoints REST (GET, POST, PUT, DELETE) |
 | `dto` | O que entra (Request, com validação) e o que sai (Response) da API |
 | `exception` | Exceções do domínio + tratamento global de erros |
 | `config` | CORS e Swagger |
 | `resources/db/migration` | Scripts do Flyway (estrutura e carga) |
 
-### Regras de negócio implementadas (BO)
+### Regras de negócio implementadas (services)
 
 | Regra | Onde | HTTP |
 |---|---|---|
-| Nome de categoria e de documento é único | CategoriaBO, DocumentoBO | 409 |
-| Sigla de órgão é única; órgão com serviços não pode ser excluído | OrgaoBO | 409 |
-| Serviço precisa de órgão cadastrado | ServicoBO | 404 / 422 |
-| Fonte reaproveitada pela URL (atualiza a data de consulta) | ServicoBO | — |
-| Assistente recomenda só serviços ativos | AssistenteBO | — |
-| Busca de município com pelo menos 2 letras | PanoramaBO | 422 |
-| Não excluir categoria que tem serviços | CategoriaBO | 409 |
-| URL da fonte oficial deve começar com `https://` | ServicoBO | 422 |
+| Nome de categoria e de documento é único | CategoriaService, DocumentoService | 409 |
+| Sigla de órgão é única; órgão com serviços não pode ser excluído | OrgaoService | 409 |
+| Serviço precisa de órgão cadastrado | ServicoService | 404 / 422 |
+| Fonte reaproveitada pela URL (atualiza a data de consulta) | ServicoService | — |
+| Assistente recomenda só serviços ativos | AssistenteService | — |
+| Busca de município com pelo menos 2 letras | PanoramaService | 422 |
+| Não excluir categoria que tem serviços | CategoriaService | 409 |
+| URL da fonte oficial deve começar com `https://` | ServicoService | 422 |
 | Data de verificação não pode ser futura | ServicoDTO (`@PastOrPresent`) | 400 |
-| Ordem da etapa não se repete no mesmo serviço | EtapaBO | 409 |
-| Documento vinculado a serviço não pode ser excluído | DocumentoBO | 409 |
-| Serviço já recomendado pelo assistente não pode ser excluído (histórico); pode ser marcado como inativo | ServicoBO | 409 |
-| Registro inexistente | todos os BOs | 404 |
+| Ordem da etapa não se repete no mesmo serviço | EtapaService | 409 |
+| Documento vinculado a serviço não pode ser excluído | DocumentoService | 409 |
+| Serviço já recomendado pelo assistente não pode ser excluído (histórico); pode ser marcado como inativo | ServicoService | 409 |
+| Registro inexistente | todos os services | 404 |
+| Sincronização com a Base dos Dados sem credencial ou com o BigQuery fora do ar | SincronizacaoService | 503 |
+| Uma sincronização por vez | SincronizacaoService | 409 |
 
 ## Endpoints
 
@@ -136,6 +139,8 @@ Documentação interativa: **`/swagger-ui.html`** (a raiz `/` redireciona para l
 | GET | `/api/municipios/{codigoIbge}` | Dados do município |
 | GET | `/api/municipios/{codigoIbge}/panorama` | Indicadores públicos do município, com fonte e período |
 | GET | `/api/indicadores` | Indicadores disponíveis |
+| GET | `/api/sincronizacao` | Situação da integração com a Base dos Dados (configurada, em andamento, último resultado) |
+| POST | `/api/sincronizacao` | Roda o SQL na Base dos Dados e grava o período mais recente no Oracle |
 | GET | `/api/status` | Verifica se a API está no ar |
 
 ### Exemplos
@@ -192,6 +197,36 @@ GET /api/municipios/3509007/panorama
 }
 ```
 
+## Integração com a Base dos Dados
+
+A [Base dos Dados](https://basedosdados.org) organiza dados públicos brasileiros no **Google BigQuery**, consultáveis com SQL.
+A API usa a Base dos Dados como **fonte dos indicadores do panorama**:
+
+1. `BaseDosDadosRepository` envia SQL para a API REST do BigQuery (`jobs.query`), autenticado com uma conta de serviço do Google Cloud.
+2. `SincronizacaoService` faz duas consultas por indicador: o **período mais recente** e o **valor de cada município** nesse período. Toda agregação (soma, contagem) acontece no BigQuery, então **nenhum dado pessoal chega à API**.
+3. Os valores são gravados no Oracle (`MUNICIPIO`, `INDICADOR_MUNICIPIO`), e a `DT_CONSULTA` da `FONTE` passa a ser a data da sincronização. Períodos antigos continuam guardados, e o panorama mostra sempre o mais recente.
+4. As telas leem do Oracle: o cidadão não espera o BigQuery a cada busca.
+
+| Indicador | Tabela na Base dos Dados | Cálculo |
+|---|---|---|
+| `POPULACAO` | `br_ibge_populacao.municipio` | `populacao` do ano mais recente |
+| `SALDO_EMPREGO_FORMAL` | `br_me_caged.microdados_movimentacao` | `SUM(saldo_movimentacao)` do último ano completo |
+| `FAMILIAS_BOLSA_FAMILIA` | `br_cgu_beneficios_cidadao.novo_bolsa_familia` | `COUNT(DISTINCT nis_favorecido)` da competência mais recente |
+| `VALOR_BOLSA_FAMILIA` | `br_cgu_beneficios_cidadao.novo_bolsa_familia` | `SUM(valor_parcela)` da competência mais recente |
+| `ESTABELECIMENTOS_SUS` | `br_ms_cnes.estabelecimento` | estabelecimentos com `indicador_vinculo_sus = 1` na competência mais recente |
+| (municípios) | `br_bd_diretorios_brasil.municipio` | código IBGE, nome e UF |
+
+**Quando roda:** pelo `POST /api/sincronizacao` (botão no painel de indicadores do site) e, ao subir a API, em segundo plano, se a última consulta tiver mais de 7 dias.
+
+### Configurar o acesso (uma vez)
+1. Em https://console.cloud.google.com crie um projeto (o BigQuery tem 1 TB de consulta grátis por mês; o modo sandbox dispensa cartão).
+2. Ative a **BigQuery API** no projeto.
+3. Em **IAM > Contas de serviço**, crie uma conta com o papel **Usuário de jobs do BigQuery** (`roles/bigquery.jobUser`) e gere uma **chave JSON**.
+4. Coloque o conteúdo do JSON na variável `BASEDOSDADOS_CREDENTIALS` (no Render: *Environment > Add Environment Variable*). Nunca commite esse arquivo.
+5. Chame `POST /api/sincronizacao` (ou o botão no painel) e confira o resultado.
+
+Sem a variável, a API funciona normalmente com os dados já gravados no Oracle, e `POST /api/sincronizacao` responde 503 explicando o que falta.
+
 ## Como executar
 
 ### Ferramentas e versões
@@ -199,7 +234,7 @@ GET /api/municipios/3509007/panorama
 - Maven 3.9+ (ou o Maven embutido do IntelliJ)
 - IntelliJ IDEA
 - Banco Oracle da FIAP (`oracle.fiap.com.br:1521/ORCL`)
-- Spring Boot 3.5
+- Spring Boot 4.1
 
 ### 1. Rodar local sem Oracle (teste rápido, banco H2 em memória)
 ```bash
@@ -238,11 +273,16 @@ Se as tabelas já tiverem sido criadas pelos scripts de Database, o Flyway recon
 | `DB_PASSWORD` | — | Senha |
 | `DDL_AUTO` | `none` | As tabelas são criadas pelo Flyway; deixe `none` |
 | `PORT` | `8080` | Definida automaticamente pelo Render |
+| `BASEDOSDADOS_CREDENTIALS` | — | JSON da conta de serviço do Google Cloud (Base dos Dados / BigQuery) |
+| `BASEDOSDADOS_BILLING_PROJECT` | `project_id` do JSON | Projeto do Google Cloud que paga a consulta |
+| `BASEDOSDADOS_UF` | `SP` | UF dos municípios sincronizados |
+| `BASEDOSDADOS_SYNC_ON_STARTUP` | `true` | Sincroniza ao subir, se os dados estiverem desatualizados |
+| `BASEDOSDADOS_MAX_AGE_DAYS` | `7` | Idade máxima (em dias) dos dados antes da sincronização automática |
 
 ## Dados
 
 - **Catálogo:** 6 serviços reais, resumidos de páginas oficiais gov.br consultadas em 10/11/2026 (link e data em `FONTE`).
-- **Panorama:** consulta única à Base dos Dados (BigQuery) em 18/11/2026, agregada por município. Períodos: população 2025 (IBGE), saldo do Novo CAGED em 2025, Bolsa Família e CNES na competência 03/2026 (dados mais recentes de acesso gratuito).
+- **Panorama:** a carga inicial (`V2__carga.sql`) veio de uma consulta à Base dos Dados em 18/11/2026: população 2025 (IBGE), saldo do Novo CAGED em 2025, Bolsa Família e CNES na competência 03/2026. A partir daí, `POST /api/sincronizacao` busca o período mais recente direto na Base dos Dados.
 - Nenhum dado pessoal é usado ou armazenado; as interações da carga são demonstrativas.
 
 ## Integrantes
