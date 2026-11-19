@@ -22,6 +22,12 @@ public class IndicadorMunicipioId implements Serializable {
     public IndicadorMunicipioId() {
     }
 
+    public IndicadorMunicipioId(Long municipioId, Long indicadorId, LocalDate referencia) {
+        this.municipioId = municipioId;
+        this.indicadorId = indicadorId;
+        this.referencia = referencia;
+    }
+
     public Long getMunicipioId() { return municipioId; }
     public Long getIndicadorId() { return indicadorId; }
     public LocalDate getReferencia() { return referencia; }

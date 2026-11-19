@@ -17,6 +17,11 @@ public final class PanoramaDTO {
     private PanoramaDTO() {
     }
 
+    // Período para exibição: "2025" (anual) ou "03/2026" (mensal)
+    public static String formatarPeriodo(Periodicidade periodicidade, LocalDate referencia) {
+        return periodicidade == Periodicidade.ANUAL ? String.valueOf(referencia.getYear()) : referencia.format(MES_ANO);
+    }
+
     public record MunicipioResponse(Long codigoIbge, String nome, String uf) {
         public static MunicipioResponse de(Municipio m) {
             return new MunicipioResponse(m.getCodigoIbge(), m.getNome(), m.getUf());
@@ -37,9 +42,7 @@ public final class PanoramaDTO {
         public static Valor de(IndicadorMunicipio v) {
             Indicador i = v.getIndicador();
             LocalDate ref = v.getId().getReferencia();
-            String periodo = i.getPeriodicidade() == Periodicidade.ANUAL
-                    ? String.valueOf(ref.getYear())
-                    : ref.format(MES_ANO);
+            String periodo = formatarPeriodo(i.getPeriodicidade(), ref);
             return new Valor(i.getCodigo(), i.getNome(), i.getDescricao(), v.getValor(), i.getUnidade(), ref, periodo,
                     i.getFonte().getTitulo(), i.getFonte().getUrl(), i.getFonte().getDataConsulta());
         }

@@ -23,7 +23,7 @@ import java.util.List;
 public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    // Exceções do domínio (404, 422, 409)
+    // Exceções do domínio (404, 422, 409, 503)
     @ExceptionHandler(RecursoNaoEncontradoException.class)
     public ResponseEntity<ErroResponse> naoEncontrado(RecursoNaoEncontradoException ex, HttpServletRequest req) {
         return montar(HttpStatus.NOT_FOUND, ex.getMessage(), req, null);
@@ -37,6 +37,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConflitoException.class)
     public ResponseEntity<ErroResponse> conflito(ConflitoException ex, HttpServletRequest req) {
         return montar(HttpStatus.CONFLICT, ex.getMessage(), req, null);
+    }
+
+    @ExceptionHandler(ServicoIndisponivelException.class)
+    public ResponseEntity<ErroResponse> indisponivel(ServicoIndisponivelException ex, HttpServletRequest req) {
+        log.warn("Serviço externo indisponível: {}", ex.getMessage());
+        return montar(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), req, null);
     }
 
     // Erros de entrada: validação, JSON inválido, tipo errado, método e rota

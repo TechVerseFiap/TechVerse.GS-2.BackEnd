@@ -28,4 +28,8 @@ public interface IndicadorMunicipioRepository extends JpaRepository<IndicadorMun
             ORDER BY v.id.referencia
             """)
     List<Object[]> valoresDoIndicador(@Param("indicador") String indicador);
+
+    // Todos os valores já gravados de um indicador (usado na sincronização para saber o que é novo)
+    @Query("SELECT v FROM IndicadorMunicipio v WHERE v.indicador.id = :indicadorId")
+    List<IndicadorMunicipio> buscarPorIndicador(@Param("indicadorId") Long indicadorId);
 }

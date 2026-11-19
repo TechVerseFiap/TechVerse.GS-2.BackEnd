@@ -93,6 +93,11 @@ public class PanoramaService {
         return indicadorRepository.findAllByOrderByIdAsc().stream().map(PanoramaDTO.IndicadorResponse::de).toList();
     }
 
+    // Chamado depois da sincronização com a Base dos Dados: a próxima busca recarrega municípios e população
+    public void limparCache() {
+        cacheMunicipios = null;
+    }
+
     private Municipio buscarEntidade(Long codigoIbge) {
         return municipioRepository.findById(codigoIbge)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Município", codigoIbge));

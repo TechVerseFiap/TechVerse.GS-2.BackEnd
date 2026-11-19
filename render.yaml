@@ -13,3 +13,8 @@ services:
         sync: false
       - key: DDL_AUTO
         value: none
+      # Base dos Dados (BigQuery): cole o JSON da conta de serviço do Google Cloud no painel do Render
+      - key: BASEDOSDADOS_CREDENTIALS
+        sync: false
+      - key: BASEDOSDADOS_UF
+        value: SP

@@ -19,6 +19,12 @@ public class Municipio {
     public Municipio() {
     }
 
+    public Municipio(Long codigoIbge, String nome, String uf) {
+        this.codigoIbge = codigoIbge;
+        this.nome = nome;
+        this.uf = uf;
+    }
+
     // Getters
     public Long getCodigoIbge() { return codigoIbge; }
     public String getNome() { return nome; }

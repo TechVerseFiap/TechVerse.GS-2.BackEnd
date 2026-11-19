@@ -68,6 +68,12 @@
             <artifactId>spring-boot-h2console</artifactId>
         </dependency>
 
+        <!-- Base dos Dados: login no Google com a conta de serviço para rodar SQL no BigQuery (API REST) -->
+        <dependency>
+            <groupId>com.google.auth</groupId>
+            <artifactId>google-auth-library-oauth2-http</artifactId>
+            <version>1.58.0</version>
+        </dependency>
 
         <dependency>
             <groupId>org.springdoc</groupId>

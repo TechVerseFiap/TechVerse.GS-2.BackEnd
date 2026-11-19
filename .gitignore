@@ -5,3 +5,6 @@ target/
 .DS_Store
 .env
 *.log
+# Chave da conta de serviço do Google Cloud (Base dos Dados)
+*service-account*.json
+gcp-*.json
