@@ -19,7 +19,7 @@
 
 ## O que a API faz
 
-1. **Catálogo de serviços públicos** (CRUD completo): categorias, serviços, requisitos, etapas e documentos.
+1. **Catálogo de serviços públicos** (CRUD completo): categorias, serviços, requisitos, etapas e documentos. O catálogo é **montado automaticamente a partir do gov.br** (veja [Catálogo do gov.br](#catálogo-do-govbr)): cerca de 500 serviços com requisitos, documentos (obrigatórios e "se aplicável"), etapas e o link direto para fazer o pedido.
 2. **Assistente:** recebe uma frase em linguagem natural ("estou desempregado e quero um curso gratuito") e devolve os serviços mais relevantes, com justificativa e link oficial.
 3. **Transparência:** todo serviço tem URL oficial (https obrigatório) e data de verificação; informações com mais de 180 dias são sinalizadas (`precisaReverificacao`).
 4. **Privacidade:** o texto digitado pelo cidadão **não é salvo**, apenas o assunto identificado e o resultado (base do indicador de impacto).
@@ -55,6 +55,7 @@ CATEGORIA ─┐        ORGAO ─┐        FONTE ─┬────────
 ```
 controller  →  service  →  repository  →  Oracle
    (HTTP)       (regras)    (acesso a dados)
+                    ├────→  GovBrRepository         →  páginas de serviços do gov.br (HTML + JSON-LD)
                     └────→  BaseDosDadosRepository  →  BigQuery (Base dos Dados)
      ↑
  exception (GlobalExceptionHandler: transforma erros em JSON padronizado)
@@ -63,7 +64,7 @@ controller  →  service  →  repository  →  Oracle
 | Pacote | Responsabilidade |
 |---|---|
 | `model` | Entidades do domínio mapeadas para as 14 tabelas do modelo de Database (JPA) |
-| `repository` | Acesso a dados (papel do DAO): interfaces Spring Data JPA para o Oracle (findBy..., existsBy...) e `BaseDosDadosRepository`, que roda SQL no BigQuery |
+| `repository` | Acesso a dados (papel do DAO): interfaces Spring Data JPA para o Oracle (findBy..., existsBy...) `GovBrRepository`, que lê as páginas de serviços do gov.br, e `BaseDosDadosRepository`, que roda SQL no BigQuery |
 | `service` | Regras de negócio (papel do BO): nome duplicado, fonte https, ordem de etapas, lógica do assistente, sincronização com a Base dos Dados |
 | `controller` | Endpoints REST (GET, POST, PUT, DELETE) |
 | `dto` | O que entra (Request, com validação) e o que sai (Response) da API |
@@ -88,8 +89,10 @@ controller  →  service  →  repository  →  Oracle
 | Documento vinculado a serviço não pode ser excluído | DocumentoService | 409 |
 | Serviço já recomendado pelo assistente não pode ser excluído (histórico); pode ser marcado como inativo | ServicoService | 409 |
 | Registro inexistente | todos os services | 404 |
-| Sincronização com a Base dos Dados sem credencial ou com o BigQuery fora do ar | SincronizacaoService | 503 |
+| Sincronização com a Base dos Dados sem credencial ou com o BigQuery fora do ar | SincronizacaoService | 503 (registrado no status) |
 | Uma sincronização por vez | SincronizacaoService | 409 |
+| Serviço do gov.br identificado pela URL oficial: atualiza sem duplicar | CatalogoGovBrService | — |
+| Página do gov.br com problema não interrompe as demais | CatalogoGovBrService | — |
 
 ## Endpoints
 
@@ -139,8 +142,8 @@ Documentação interativa: **`/swagger-ui.html`** (a raiz `/` redireciona para l
 | GET | `/api/municipios/{codigoIbge}` | Dados do município |
 | GET | `/api/municipios/{codigoIbge}/panorama` | Indicadores públicos do município, com fonte e período |
 | GET | `/api/indicadores` | Indicadores disponíveis |
-| GET | `/api/sincronizacao` | Situação da integração com a Base dos Dados (configurada, em andamento, último resultado) |
-| POST | `/api/sincronizacao` | Roda o SQL na Base dos Dados e grava o período mais recente no Oracle |
+| GET | `/api/sincronizacao` | Situação da sincronização: etapa e progresso, último resultado do catálogo do gov.br e da Base dos Dados |
+| POST | `/api/sincronizacao` | Inicia em segundo plano (202): catálogo do gov.br e indicadores da Base dos Dados |
 | GET | `/api/status` | Verifica se a API está no ar |
 
 ### Exemplos
@@ -197,6 +200,34 @@ GET /api/municipios/3509007/panorama
 }
 ```
 
+## Catálogo do gov.br
+
+O catálogo de serviços vem do portal oficial https://www.gov.br/pt-br/servicos. O gov.br não oferece API aberta para o catálogo (a API REST do portal pede login), então a API **lê as páginas públicas** com [jsoup](https://jsoup.org), respeitando o `robots.txt`, uma requisição por vez e com pausa entre elas.
+
+1. `GovBrRepository.listarServicos` percorre as categorias do gov.br voltadas ao cidadão (10 serviços por página).
+2. `GovBrRepository.buscarServico` lê cada página:
+   - **JSON-LD (schema.org)** que a própria página publica: nome, descrição e órgão responsável;
+   - seção **"Quem pode utilizar"**: público e requisitos;
+   - **"Etapas"**: passo a passo, com **"Documentação"** ("em comum para todos os casos" = obrigatório; "casos específicos" = se aplicável) e **"Canais de prestação"** (links Web e atendimento presencial);
+   - botão **"Iniciar"**: o link direto para fazer o pedido.
+3. `CatalogoGovBrService` grava tudo nas tabelas do modelo (`SERVICO`, `ORGAO`, `FONTE`, `REQUISITO`, `ETAPA`, `DOCUMENTO`, `SERVICO_DOCUMENTO`, `CANAL`), **sem mudar o modelo de Database**:
+   - o serviço é identificado pela URL oficial (`FONTE.DS_URL`): rodar de novo atualiza, não duplica;
+   - serviços que já existiam mantêm nome e descrição em linguagem simples escritos pela equipe e recebem requisitos, documentos, etapas e canais do gov.br;
+   - órgãos e documentos são reaproveitados pelo nome;
+   - palavras-chave do assistente vêm do nome, do endereço da página (siglas como `cnh`) e dos sinônimos que o gov.br publica;
+   - serviço conferido há menos de 7 dias é pulado: a sincronização pode ser retomada se for interrompida.
+
+| Nossa categoria | Categorias do gov.br |
+|---|---|
+| Trabalho | Trabalho e emprego (para o cidadão, para todos) |
+| Educação | Capacitações para todos, ensino técnico, EJA |
+| Documentos | Trânsito (CNH), CPF, nacionalidade, serviço militar, certidões |
+| Benefícios | Programas sociais, benefícios da Previdência, proteção social, alimentação, casa própria |
+| Saúde | Vacinação, urgências e emergências, informações do SUS |
+
+Ficaram de fora categorias com serviços de instituições específicas (ex.: ingresso em cada universidade federal) ou voltados a gestores.
+O mapeamento fica em `CatalogoGovBrService.MAPA`.
+
 ## Integração com a Base dos Dados
 
 A [Base dos Dados](https://basedosdados.org) organiza dados públicos brasileiros no **Google BigQuery**, consultáveis com SQL.
@@ -216,7 +247,7 @@ A API usa a Base dos Dados como **fonte dos indicadores do panorama**:
 | `ESTABELECIMENTOS_SUS` | `br_ms_cnes.estabelecimento` | estabelecimentos com `indicador_vinculo_sus = 1` na competência mais recente |
 | (municípios) | `br_bd_diretorios_brasil.municipio` | código IBGE, nome e UF |
 
-**Quando roda:** pelo `POST /api/sincronizacao` (botão no painel de indicadores do site) e, ao subir a API, em segundo plano, se a última consulta tiver mais de 7 dias.
+**Quando roda (catálogo e Base dos Dados):** pelo `POST /api/sincronizacao` (botão **Sincronizar agora** no painel de indicadores do site), em segundo plano: o painel mostra a etapa e o progresso. Ao subir, a API também sincroniza sozinha o que tiver mais de 7 dias. A primeira leitura do catálogo leva de 10 a 20 minutos (são centenas de páginas).
 
 ### Configurar o acesso (uma vez)
 1. Em https://console.cloud.google.com crie um projeto (o BigQuery tem 1 TB de consulta grátis por mês; o modo sandbox dispensa cartão).
@@ -278,10 +309,14 @@ Se as tabelas já tiverem sido criadas pelos scripts de Database, o Flyway recon
 | `BASEDOSDADOS_UF` | `SP` | UF dos municípios sincronizados |
 | `BASEDOSDADOS_SYNC_ON_STARTUP` | `true` | Sincroniza ao subir, se os dados estiverem desatualizados |
 | `BASEDOSDADOS_MAX_AGE_DAYS` | `7` | Idade máxima (em dias) dos dados antes da sincronização automática |
+| `GOVBR_SYNC_ON_STARTUP` | `true` (`false` no perfil `dev`) | Sincroniza o catálogo do gov.br ao subir, se estiver desatualizado |
+| `GOVBR_MAX_PER_CATEGORY` | `0` (todos) | Máximo de serviços lidos por categoria do gov.br |
+| `GOVBR_MAX_AGE_DAYS` | `7` | Serviço conferido há menos de N dias não é lido de novo |
+| `GOVBR_DELAY_MS` | `300` | Pausa entre requisições ao gov.br |
 
 ## Dados
 
-- **Catálogo:** 6 serviços reais, resumidos de páginas oficiais gov.br consultadas em 10/11/2026 (link e data em `FONTE`).
+- **Catálogo:** a carga inicial tem 6 serviços resumidos pela equipe a partir do gov.br (10/11/2026). A sincronização acrescenta e atualiza os serviços direto das páginas oficiais do gov.br, com link e data de consulta em `FONTE`.
 - **Panorama:** a carga inicial (`V2__carga.sql`) veio de uma consulta à Base dos Dados em 18/11/2026: população 2025 (IBGE), saldo do Novo CAGED em 2025, Bolsa Família e CNES na competência 03/2026. A partir daí, `POST /api/sincronizacao` busca o período mais recente direto na Base dos Dados.
 - Nenhum dado pessoal é usado ou armazenado; as interações da carga são demonstrativas.
 
